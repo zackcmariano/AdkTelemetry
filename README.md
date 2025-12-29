@@ -1,8 +1,8 @@
-# 🧠 Oraicle
+# 🧠 Oraicle-Agent
 
 > **Turn any Google-ADK Agent into a Root Agent — instantly.**
 
-Oraicle is a **groundbreaking Python library** that extends the Google Agent Development Kit (Google-ADK), enabling **any agent to become a `root_agent` dynamically**, without hacks, forks, or duplicated apps.
+Oraicle-Agent is a **groundbreaking Python library** that extends the Google Agent Development Kit (Google-ADK), enabling **any agent to become a `root_agent` dynamically**, without hacks, forks, or duplicated apps.
 
 This unlocks a **new architectural paradigm** for multi-agent systems:
 - Multiple conversational entrypoints
@@ -12,16 +12,16 @@ This unlocks a **new architectural paradigm** for multi-agent systems:
 
 ---
 
-## 🚀 Why Oraicle exists
+## 🚀 Why Oraicle-Agent exists
 
 Google-ADK assumes:
 - One `root_agent` per application
 - Sub-agents can’t be direct entrypoints
 - One conversational domain per deployment
 
-**Oraicle breaks this limitation — intentionally and cleanly.**
+**Oraicle-Agent breaks this limitation — intentionally and cleanly.**
 
-With Oraicle, **any agent can become the root of a conversation**, while still participating in a larger A2A system.
+With Oraicle-Agent, **any agent can become the root of a conversation**, while still participating in a larger A2A system.
 
 > 🔥 This is not a hack.  
 > 🔥 This is not a fork.  
@@ -29,7 +29,7 @@ With Oraicle, **any agent can become the root of a conversation**, while still p
 
 ---
 
-## ✨ What makes Oraicle unique?
+## ✨ What makes Oraicle-Agent unique?
 
 ### ✅ Dynamic Root Agents
 Choose *at runtime* which agent owns the conversation.
@@ -52,7 +52,7 @@ Works with:
 
 > **Any `Agent` can be a `root_agent` if it is explicitly declared as one.**
 
-Oraicle formalizes this idea.
+Oraicle-Agent formalizes this idea.
 
 ---
 
@@ -92,4 +92,4 @@ from oraicle.adk.loader_patch import root_agent
 ## 📄 License
 
 MIT License © 2025  
-Built with ❤️ for the GenAI community.
+Built with 🤖 for the GenAI community.
