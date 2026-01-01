@@ -1,6 +1,7 @@
-# 🧠 Oraicle-Agent
+# Oraicle-Agent
 
-![alt text](img/logo_oraicle-agent.png)
+![Oraicle Agent](https://raw.githubusercontent.com/zackcmariano/oraicle-agent/refs/heads/master/assets/oraicle-agent-lib.png)
+
 
 > **Turn any Google-ADK Agent into a Root Agent - instantly.**
 
