@@ -1,6 +1,6 @@
 # 🧠 Oraicle-Agent
 
-> **Turn any Google-ADK Agent into a Root Agent — instantly.**
+> **Turn any Google-ADK Agent into a Root Agent - instantly.**
 
 Oraicle-Agent is a **groundbreaking Python library** that extends the Google Agent Development Kit (Google-ADK), enabling **any agent to become a `root_agent` dynamically**, without hacks, forks, or duplicated apps.
 
@@ -19,7 +19,7 @@ Google-ADK assumes:
 - Sub-agents can’t be direct entrypoints
 - One conversational domain per deployment
 
-**Oraicle-Agent breaks this limitation — intentionally and cleanly.**
+**Oraicle-Agent breaks this limitation - intentionally and cleanly.**
 
 With Oraicle-Agent, **any agent can become the root of a conversation**, while still participating in a larger A2A system.
 
@@ -70,13 +70,13 @@ pip install oraicle
 from oraicle import autoagent
 from google.adk.agents import Agent
 
-professor_historia = Agent(
-    name="professor_historia",
+history_teacher = Agent(
+    name="history_teacher",
     model="gemini-2.0-flash",
     instruction="You are a history teacher."
 )
 
-autoagent(professor_historia)
+autoagent(history_teacher)
 ```
 
 ---
@@ -84,12 +84,12 @@ autoagent(professor_historia)
 ## ☁️ Deploying to Vertex AI Agent Engine
 
 ```python
-from oraicle.adk.loader_patch import root_agent
+from app.sub_agents.history_teacher.agent import history_teacher
 ```
 
 ---
 
 ## 📄 License
 
-MIT License © 2025  
+MIT License © 2026  
 Built with 🤖 for the GenAI community.
