@@ -1,5 +1,7 @@
 # 🧠 Oraicle-Agent
 
+![alt text](img/logo_oraicle-agent.png)
+
 > **Turn any Google-ADK Agent into a Root Agent - instantly.**
 
 Oraicle-Agent is a **groundbreaking Python library** that extends the Google Agent Development Kit (Google-ADK), enabling **any agent to become a `root_agent` dynamically**, without hacks, forks, or duplicated apps.
