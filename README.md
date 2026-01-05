@@ -121,6 +121,7 @@ Each tool should live inside `app/tools` and expose public functions
 
 ### ✅ Importing tools inside sub-agents (correct way)
 Instead of importing tools directly from app.tools, always import them from oraicle.tools.
+
 ❌ **Do NOT do this**
 ```python
 from app.tools.student_exam import student_exam
