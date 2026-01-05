@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "oraicle"
-version = "1.0.1"
+version = "2.0.0"
 description = "Oraicle-Agent — Turn any Google-ADK Agent into a root_agent dynamically."
 readme = "README.md"
 license = { file = "LICENSE" }
