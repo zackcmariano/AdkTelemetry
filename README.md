@@ -92,6 +92,88 @@ from app.sub_agents.history_teacher.agent import history_teacher
 
 ---
 
+## 🔧 Using Tools with Oraicle-Agent
+
+Oraicle-Agent provides **automatic runtime discovery of tools**, allowing sub-agents to use tools **without importing directly from** `app.tools`.
+
+This ensures:
+- No PYTHONPATH hacks
+- No custom bootstrap commands
+- Full compatibility with adk web ./sub_agents
+- Clean, scalable architecture
+
+## 📁 Recommended project structure
+```bash
+app/
+├── tools/
+│   ├── student_exam.py
+│   ├── register_student_grades.py
+│   └── any_new_tool.py
+│
+└── sub_agents/
+    └── history_teacher/
+        ├── agent.py
+        └── prompt.py
+```
+
+Each tool should live inside `app/tools` and expose public functions
+(optionally using `__all__`).
+
+### ✅ Importing tools inside sub-agents (correct way)
+Instead of importing tools directly from app.tools, always import them from oraicle.tools.
+❌ **Do NOT do this**
+```python
+from app.tools.student_exam import student_exam
+from app.tools.register_student_grades import register_student_grades
+```
+### ✅ Do this
+```python
+from oraicle.tools import student_exam, register_student_grades
+```
+Oraicle-Agent will **automatically discover and load all tools inside** `app/tools` **at runtime**.
+
+### ⚡ Example: Sub-agent using tools
+```python
+from google.adk.agents import Agent
+from oraicle import autoagent
+from oraicle.tools import student_exam, register_student_grades
+from .prompt import AGENT_PROMPT
+
+history_teacher = Agent(
+    name="history_teacher",
+    model="gemini-2.0-flash-lite",
+    instruction=AGENT_PROMPT,
+    tools=[
+        student_exam,
+        register_student_grades,
+    ],
+)
+
+autoagent(history_teacher)
+```
+No additional configuration is required.
+
+## 🚀 Running locally with ADK
+Oraicle-Agent works with the **default ADK command**, no bootstrap needed:
+```bash
+adk web ./sub_agents
+```
+All sub-agents will:
+- Be discovered automatically
+- Act as independent root_agents
+- Have full access to shared tools
+- Maintain isolated conversational contexts
+
+
+## 🧠 Why this matters
+This design turns `app/tools` into a **runtime tool registry**, not a static import dependency.
+You get:
+- True plug-and-play tools
+- Zero coupling between app and sub-agents
+- A clean A2A + Tooling architecture
+- Production-safe execution (local & Vertex AI)
+
+
 ## 📄 License
 
 MIT License © 2026  
