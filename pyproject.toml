@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "oraicle"
-version = "3.4.0"
-description = "Oraicle-Agent — Turn any Google-ADK Agent into a root_agent dynamically."
+name = "AdkTelemetry"
+version = "0.1.0"
+description = "Library for Google ADK focused on observability, telemetry, session tracing, and operational cost analysis for AI agents."
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
@@ -13,32 +13,49 @@ authors = [
 ]
 keywords = [
   "google-adk",
-  "agent",
+  "adk",
+  "telemetry",
+  "observability",
   "ai-agents",
-  "vertex-ai",
-  "multi-agent",
-  "a2a"
+  "agent-observability",
+  "session-tracing",
+  "finops",
+  "llm-monitoring",
+  "multi-agent"
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12"
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: System :: Monitoring"
 ]
 requires-python = ">=3.10"
 
 dependencies = [
-  "google-adk>=1.16.0"
+  "google-adk>=1.16.0",
+  "pyyaml>=6.0"
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[tool.setuptools.package-data]
+adktelemetry = ["gemini_pricing.yaml"]
+
 [project.urls]
-Homepage = "https://github.com/zackcmariano/oraicle-agent"
-Documentation = "https://github.com/zackcmariano/oraicle-agent"
-Issues = "https://github.com/zackcmariano/oraicle-agent/issues"
+Homepage = "https://github.com/zackcmariano/AdkTelemetry"
+Documentation = "https://github.com/zackcmariano/AdkTelemetry"
+Repository = "https://github.com/zackcmariano/AdkTelemetry"
+Issues = "https://github.com/zackcmariano/AdkTelemetry/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["oraicle*"]
+include = ["adktelemetry*"]

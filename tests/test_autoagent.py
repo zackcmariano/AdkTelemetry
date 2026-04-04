@@ -1,5 +1,5 @@
-from oraicle.autoagent import autoagent
-from oraicle.registry import AgentRegistry
+from adktelemetry.autoagent import autoagent
+from adktelemetry.registry import AgentRegistry
 
 class DummyAgent:
     def __init__(self, name):
@@ -13,4 +13,5 @@ def test_autoagent_registers_agent():
     returned = autoagent(agent)
 
     assert returned == agent
-    assert AgentRegistry.get_root("auto_test") == agent
+    reg = AgentRegistry.get_root("auto_test")
+    assert reg is not None and reg.agent == agent

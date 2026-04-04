@@ -1,6 +1,6 @@
-from oraicle.registry import AgentRegistry
-from oraicle.adk.loader_patch import resolve_root_agent
-from oraicle.exceptions import NoRootAgentRegistered
+from adktelemetry.exceptions import NoRootAgentRegistered
+from adktelemetry.adk.loader_patch import resolve_root_agent
+from adktelemetry.registry import AgentRegistry
 
 class DummyAgent:
     def __init__(self, name):
@@ -11,7 +11,7 @@ def test_resolve_root_agent_success():
     AgentRegistry._root_agents.clear()
 
     agent = DummyAgent("root_ok")
-    AgentRegistry.register_root(agent)
+    AgentRegistry.register_root(agent, file_path="/tmp/t.py", module_name="t")
 
     root = resolve_root_agent()
     assert root == agent

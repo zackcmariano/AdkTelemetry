@@ -1,5 +1,3 @@
-# oraicle/registry.py
-
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -13,10 +11,7 @@ class RegisteredAgent:
 
 
 class AgentRegistry:
-    """
-    Central semantic registry for Oraicle root agents.
-    This is NOT filesystem-based.
-    """
+    """Semantic registry for root agents (not filesystem-based)."""
 
     _root_agents: Dict[str, RegisteredAgent] = {}
 

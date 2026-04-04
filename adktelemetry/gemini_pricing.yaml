@@ -1,0 +1,88 @@
+# AdkTelemetry — FinOps reference (Gemini API Developer)
+# Currency: USD per 1 million tokens (text / multimodal as noted), unless `unit` is set.
+# Source: https://ai.google.dev/gemini-api/docs/pricing?hl=pt-br
+# Page last updated (UTC): 2026-04-02
+#
+# Notes:
+# - Several models use tiered pricing for prompts >200k tokens; entries use the <=200k tier.
+# - Image / video / audio-only SKUs may need dedicated billing; text rates are used for token FinOps when applicable.
+
+meta:
+  source_url: "https://ai.google.dev/gemini-api/docs/pricing?hl=pt-br"
+  last_sync_utc: "2026-04-02"
+
+models:
+  # --- Gemini 3.1 (preview) ---
+  gemini-3.1-pro-preview:
+    input_per_million_usd: 2.0
+    output_per_million_usd: 12.0
+  gemini-3.1-pro-preview-customtools:
+    input_per_million_usd: 2.0
+    output_per_million_usd: 12.0
+  gemini-3.1-flash-lite-preview:
+    input_per_million_usd: 0.25
+    output_per_million_usd: 1.5
+  gemini-3.1-flash-live-preview:
+    input_per_million_usd: 0.75
+    output_per_million_usd: 4.5
+  gemini-3.1-flash-image-preview:
+    input_per_million_usd: 0.5
+    output_per_million_usd: 3.0
+
+  # --- Gemini 3 (preview) ---
+  gemini-3-flash-preview:
+    input_per_million_usd: 0.5
+    output_per_million_usd: 3.0
+  gemini-3-pro-image-preview:
+    input_per_million_usd: 2.0
+    output_per_million_usd: 12.0
+
+  # --- Gemini 2.5 ---
+  gemini-2.5-pro:
+    input_per_million_usd: 1.25
+    output_per_million_usd: 10.0
+  gemini-2.5-flash:
+    input_per_million_usd: 0.3
+    output_per_million_usd: 2.5
+  gemini-2.5-flash-lite:
+    input_per_million_usd: 0.1
+    output_per_million_usd: 0.4
+  gemini-2.5-flash-lite-preview-09-2025:
+    input_per_million_usd: 0.1
+    output_per_million_usd: 0.4
+  gemini-2.5-flash-native-audio-preview-12-2025:
+    input_per_million_usd: 0.5
+    output_per_million_usd: 2.0
+  gemini-2.5-flash-image:
+    input_per_million_usd: 0.3
+    output_per_million_usd: 2.5
+  gemini-2.5-flash-preview-tts:
+    input_per_million_usd: 0.5
+    output_per_million_usd: 10.0
+  gemini-2.5-pro-preview-tts:
+    input_per_million_usd: 1.0
+    output_per_million_usd: 20.0
+  gemini-2.5-computer-use-preview-10-2025:
+    input_per_million_usd: 1.25
+    output_per_million_usd: 10.0
+
+  # --- Gemini 2.0 (deprecated June 2026; rates retained for telemetry) ---
+  gemini-2.0-flash:
+    input_per_million_usd: 0.1
+    output_per_million_usd: 0.4
+  gemini-2.0-flash-lite:
+    input_per_million_usd: 0.075
+    output_per_million_usd: 0.3
+
+  # --- Embeddings ---
+  gemini-embedding-001:
+    input_per_million_usd: 0.15
+    output_per_million_usd: 0.0
+  gemini-embedding-2-preview:
+    input_per_million_usd: 0.2
+    output_per_million_usd: 0.0
+
+  # --- Robotics / other previews (token text rates aligned with Flash family) ---
+  gemini-robotics-er-1.5-preview:
+    input_per_million_usd: 0.3
+    output_per_million_usd: 2.5
