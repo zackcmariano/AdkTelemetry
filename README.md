@@ -66,7 +66,7 @@ ensure_adk_web_server_patch()
 
 ## Dashboard guide (metrics & usability)
 
-(https://raw.githubusercontent.com/zackcmariano/AdkTelemetry/refs/heads/master/assets/page_dash_adktelemetry.png)
+![DashAdkTelemetry](https://raw.githubusercontent.com/zackcmariano/AdkTelemetry/refs/heads/master/assets/page_dash_adktelemetry.png)
 
 The layout is a single page: **header** (summary pills + time range), then a **grid** of cards, then **Sessions Errors** and **Sessions** tables. All numeric cards respect the **selected time range** except when you load the snapshot API with **no** `since`/`until` (full store).
 
