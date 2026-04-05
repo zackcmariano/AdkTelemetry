@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -580,7 +581,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
   </header>
   <main>
-    <p class="muted" style="margin-top:0">AdkTelemetry - observability for Google ADK agents (events, tokens, FinOps). Data updates every few seconds.</p>
+    <p class="muted" style="margin-top:0">AdkTelemetry - observability for Google ADK agents (events, tokens, FinOps). The dashboard refreshes when new telemetry is recorded (Server-Sent Events); when idle, only a lightweight keep-alive runs.</p>
     <div class="grid">
       <section class="card span-4">
         <div class="card-head"><span class="card-title">Invocations by model</span></div>
@@ -710,9 +711,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <script>
     // Caminho absoluto: com URL /adktelemetry (sem barra final), "./api/..." virava /api/... (404).
     const API = "/adktelemetry/api/v1/snapshot";
+    const LIVE_STREAM = "/adktelemetry/api/v1/stream";
     const SESSION_DETAIL_API = "/adktelemetry/api/v1/session_detail";
     const PRICING_CATALOG_API = "/adktelemetry/api/v1/pricing_catalog";
     const ERROR_BREAKDOWN_API = "/adktelemetry/api/v1/error_breakdown";
+    let liveEs = null;
     const colors = ["#22c55e","#3b82f6","#f97316","#ec4899","#a855f7","#14b8a6"];
     const errorPieColors = [
       "#b91c1c","#dc2626","#ef4444","#f43f5e","#e11d48","#ec4899","#db2777",
@@ -1561,9 +1564,32 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       openSessionModal(a.dataset.sessionId, a.dataset.userId);
     });
 
+    function connectLiveStream() {
+      if (liveEs) {
+        liveEs.close();
+        liveEs = null;
+      }
+      try {
+        liveEs = new EventSource(LIVE_STREAM);
+      } catch (e) {
+        console.error("AdkTelemetry EventSource:", e);
+        return;
+      }
+      liveEs.addEventListener("update", function () {
+        refresh();
+      });
+      liveEs.onerror = function () {
+        if (liveEs) {
+          liveEs.close();
+          liveEs = null;
+        }
+        setTimeout(connectLiveStream, 3000);
+      };
+    }
+
     updateRangeLabel();
     refresh();
-    setInterval(refresh, 4000);
+    connectLiveStream();
   </script>
 </body>
 </html>
@@ -1622,6 +1648,37 @@ def register_routes(app: Any) -> None:
 
         snap["pricing_models"] = len(list_known_models(pricing_path))
         return JSONResponse(content=json.loads(json.dumps(snap, default=str)))
+
+    @app.get("/adktelemetry/api/v1/stream", include_in_schema=False)
+    async def telemetry_live_stream() -> Any:
+        from fastapi.responses import StreamingResponse
+
+        from adktelemetry.live_notify import register_event_loop, subscribe, unsubscribe
+
+        async def gen():
+            loop = asyncio.get_running_loop()
+            register_event_loop(loop)
+            q = subscribe()
+            try:
+                yield b"event: ready\ndata: {}\n\n"
+                while True:
+                    try:
+                        await asyncio.wait_for(q.get(), timeout=45.0)
+                        yield b"event: update\ndata: {}\n\n"
+                    except asyncio.TimeoutError:
+                        yield b": keepalive\n\n"
+            finally:
+                unsubscribe(q)
+
+        return StreamingResponse(
+            gen(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.get("/adktelemetry/api/v1/pricing_catalog", include_in_schema=False)
     async def pricing_catalog_api() -> Any:

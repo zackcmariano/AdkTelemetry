@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from adktelemetry.finops import estimate_interaction_cost_usd, usage_metadata_to_counts
+from adktelemetry.live_notify import notify_telemetry_changed, reset_for_tests as _reset_live_notify
 
 
 def _now() -> float:
@@ -64,6 +65,7 @@ class TelemetryStore:
 
     @classmethod
     def reset_for_tests(cls) -> None:
+        _reset_live_notify()
         with cls._lock:
             cls._instance = cls()
 
@@ -124,6 +126,8 @@ class TelemetryStore:
             evs.append(record)
             if len(evs) > self.max_events_per_session:
                 del evs[: len(evs) - self.max_events_per_session]
+
+        notify_telemetry_changed()
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:

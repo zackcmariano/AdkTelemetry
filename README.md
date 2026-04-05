@@ -51,8 +51,9 @@ ensure_adk_web_server_patch()
 
 | Surface | Purpose |
 |--------|---------|
-| **Dashboard** | Human-readable charts and tables; auto-refreshes about every **4 seconds**. |
-| **`GET /adktelemetry/api/v1/snapshot`** | Same aggregates the UI uses; optional `since` / `until` (Unix seconds) for a time window. |
+| **Dashboard** | Human-readable charts and tables; **event-driven** updates over **Server-Sent Events** (`GET /adktelemetry/api/v1/stream`) whenever a new telemetry record is stored (with a short debounce for bursts). **Idle:** one long-poll-style wait plus an occasional comment line (~45s) so proxies do not drop the stream. |
+| **`GET /adktelemetry/api/v1/stream`** | `text/event-stream` for the dashboard: `event: ready` on connect, then `event: update` after each coalesced batch of store writes. |
+| **`GET /adktelemetry/api/v1/snapshot`** | Same aggregates the UI uses; optional `since` / `until` (Unix seconds) for a time window. The UI calls this **after** each `update` event (and once on load), not on a fixed timer. |
 | **`GET /adktelemetry/api/v1/session_detail`** | Per-session brief from the in-memory buffer (`user_id`, `session_id` query params). |
 | **`GET /adktelemetry/api/v1/pricing_catalog`** | Reference FinOps rates shown in the UI (USD per 10K tokens) plus a **catalog reference date** (month/year). |
 | **`GET /adktelemetry/api/v1/error_breakdown`** | Error counts grouped by short label for the selected range (same query rules as snapshot). |
@@ -135,6 +136,15 @@ Bar length is **normalized within two groups**: events vs errors share one max; 
 ---
 
 ## REST API summary
+
+### `GET /adktelemetry/api/v1/stream`
+
+- **`Content-Type`:** `text/event-stream` (SSE).
+- **`event: ready`** — sent once when the browser connects (dashboard does not depend on it for the first paint; it already runs an initial `snapshot` fetch).
+- **`event: update`** — emitted after the in-memory store receives new telemetry (Runner events and captured SSE errors), with a **~80ms debounce** so a single model turn does not flood the client.
+- **Comment lines** (`: keepalive`) — about every **45 seconds** while idle so intermediaries treat the connection as alive.
+
+Open one stream per dashboard tab. If the connection drops, the UI reconnects after ~3 seconds.
 
 ### `GET /adktelemetry/api/v1/snapshot`
 
