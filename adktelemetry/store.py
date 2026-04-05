@@ -762,6 +762,43 @@ def infer_content_runtime_error(text: str) -> tuple[str | None, str | None]:
     return None, None
 
 
+def fatal_error_message_to_record(message: str) -> dict[str, Any]:
+    """
+    Build a store row for failures that never become a yielded ADK Event — e.g.
+    google.genai ClientError inside Runner.run_async, or ADK web UI fatal SSE
+    payloads. Reuses the same error_code inference as content-based scans.
+    """
+    raw = (message or "").strip()
+    if not raw:
+        raw = "Unknown runner failure"
+    ic, im = infer_content_runtime_error(raw)
+    code = ic or "RUNNER_FAILURE"
+    err_msg = (im or raw)[:4000]
+    return {
+        "id": None,
+        "timestamp": time.time(),
+        "author": "system",
+        "invocation_id": None,
+        "branch": None,
+        "error_code": code,
+        "error_message": err_msg,
+        "model_version": None,
+        "partial": None,
+        "finish_reason": None,
+        "usage": {
+            "prompt_token_count": 0,
+            "candidates_token_count": 0,
+            "total_token_count": None,
+        },
+        "error_inferred_from_content": True,
+    }
+
+
+def runner_failure_to_record(exc: BaseException) -> dict[str, Any]:
+    """Normalize an exception raised during Runner.run_async (before any error Event is yielded)."""
+    return fatal_error_message_to_record(str(exc))
+
+
 def _normalize_model_label(name: str | None) -> str | None:
     if not name:
         return None
