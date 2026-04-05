@@ -2,7 +2,7 @@
 
 ![AdkTelemetry](https://raw.githubusercontent.com/zackcmariano/AdkTelemetry/refs/heads/master/assets/adk-telemetry-lib.png)
 
-> **Observability & FinOps for Google ADK agents — in real time.**
+> **Observability & FinOps for Google ADK agents - in real time.**
 
 AdkTelemetry is a **Python library for Google ADK** that captures **runner events**, **token usage**, **estimated USD cost**, and **error signals**, then exposes them through a **built-in dashboard** and **JSON APIs**.
 
@@ -26,7 +26,7 @@ pip install AdkTelemetry
 from adktelemetry import agentelemetry
 
 agentelemetry(
-    modelkey="YOUR_GEMINI_API_KEY",  # required — use your app’s secret/config source
+    modelkey="YOUR_GEMINI_API_KEY",  # required - use your app’s secret/config source
     adkmodel="gemini-2.5-flash",     # optional FinOps fallback when events lack model_version
 )
 ```
@@ -41,7 +41,7 @@ ensure_adk_web_server_patch()
 
 3. Run `adk web`, open `/adktelemetry`, and use the time range control to match the window you care about.
 
-**Configuration in code:** the library does not read environment variables by itself. You normally pass `modelkey` (and optionally `adkmodel`) from your own configuration — for example `os.environ["GEMINI_API_KEY"]`, a secrets manager, or Django settings.
+**Configuration in code:** the library does not read environment variables by itself. You normally pass `modelkey` (and optionally `adkmodel`) from your own configuration - for example `os.environ["GEMINI_API_KEY"]`, a secrets manager, or Django settings.
 
 ---
 
@@ -84,7 +84,7 @@ Changing the range updates the snapshot query, recomputes aggregates, and keeps 
 
 ### Invocations by model
 
-- **Donut + legend** — share of **invocation counts** by resolved model key in the range.
+- **Donut + legend** - share of **invocation counts** by resolved model key in the range.
 - Counts come from each event’s `model_version`, with FinOps resolution and **fallback** to `adkmodel` when the event has no model.
 - Legend lists up to **8** rows; the distribution object in JSON may contain more keys.
 
@@ -92,9 +92,9 @@ Changing the range updates the snapshot query, recomputes aggregates, and keeps 
 
 Four **horizontal bars** (not a single combined scale):
 
-1. **adk** — total **runner event** count in the range (`totals.events`).
-2. **errors** — total error count (`totals.errors`), same basis as the Errors pill.
-3. **in tok** / **out tok** — **prompt** and **candidates** token totals (`totals.total_input_tokens`, `totals.total_output_tokens`).
+1. **adk** - total **runner event** count in the range (`totals.events`).
+2. **errors** - total error count (`totals.errors`), same basis as the Errors pill.
+3. **in tok** / **out tok** - **prompt** and **candidates** token totals (`totals.total_input_tokens`, `totals.total_output_tokens`).
 
 Bar length is **normalized within two groups**: events vs errors share one max; input vs output tokens share another. Use this card to compare **volume of ADK traffic**, **error load**, and **token volume** side by side.
 
@@ -102,7 +102,7 @@ Bar length is **normalized within two groups**: events vs errors share one max; 
 
 - One row per session in the snapshot list: **truncated session id**, **relative bar** (max = largest session cost in the list), **cost** to six decimals.
 - **Scroll** shows roughly **seven** rows; more sessions scroll inside the card.
-- **Footer** — **Total cost (all sessions)** = sum of `total_cost_usd` for **every** session in the current range’s payload (not only visible rows). This matches FinOps recomputation from events in the window.
+- **Footer** - **Total cost (all sessions)** = sum of `total_cost_usd` for **every** session in the current range’s payload (not only visible rows). This matches FinOps recomputation from events in the window.
 
 ### Activity timeline (stacked)
 
@@ -120,12 +120,12 @@ Bar length is **normalized within two groups**: events vs errors share one max; 
 ### Sessions Errors
 
 - Columns: **Time**, **Session**, **Author**, **Code**, **Message**.
-- Rows combine native **`LlmResponse`** error fields and **plain-text** failures (e.g. `Error: …`) on model/system content — same signals that increment the **Errors** column in **Sessions**.
-- Up to **40** rows per refresh in the UI; the API may return more in `recent_errors` (still subject to the global in-memory cap — see limitations).
+- Rows combine native **`LlmResponse`** error fields and **plain-text** failures (e.g. `Error: …`) on model/system content - same signals that increment the **Errors** column in **Sessions**.
+- Up to **40** rows per refresh in the UI; the API may return more in `recent_errors` (still subject to the global in-memory cap - see limitations).
 
 ### Sessions
 
-- Columns: **Session** (link), **User**, **Events**, **Errors**, **In tok**, **Out tok**, **Cost USD** — all **recomputed for the selected range** when filtering.
+- Columns: **Session** (link), **User**, **Events**, **Errors**, **In tok**, **Out tok**, **Cost USD** - all **recomputed for the selected range** when filtering.
 - Rows with **Errors > 0** are highlighted.
 - Up to **50** session rows per refresh.
 - **Click the session id** to open **Session detail** (modal): session/user ids, first/last buffered event times, buffer stats (event count, authors order, token totals from buffer), optional **errors brief**, and a short disclaimer that the brief is **deterministic** from the ring buffer (no LLM), and old events may have rotated out.
@@ -168,7 +168,7 @@ Same `since` / `until` rules as snapshot. Body includes `total`, `slices` (`labe
 
 - Session and total **USD** values are **estimates** from **token counts** and the library’s **shipped FinOps catalog** (list-style rates). They are **not** a substitute for your Google Cloud / Gemini **billing** exports.
 - **Tiered pricing, modalities, or discounts** may differ; the UI and catalog modal note that official pricing may vary.
-- The **catalog reference date** appears as **month/year** (e.g. in the page footer, the FinOps catalog modal, and the `catalog_updated` field from **`/adktelemetry/api/v1/pricing_catalog`**). **Always check that date** when comparing estimates to real invoices — the catalog is refreshed on a schedule by **support / operations**, not by each application team.
+- The **catalog reference date** appears as **month/year** (e.g. in the page footer, the FinOps catalog modal, and the `catalog_updated` field from **`/adktelemetry/api/v1/pricing_catalog`**). **Always check that date** when comparing estimates to real invoices - the catalog is refreshed on a schedule by **support / operations**, not by each application team.
 - For the latest public list prices, use the linked **[Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)** documentation.
 
 ---
