@@ -1,6 +1,6 @@
 # AdkTelemetry
 
-![AdkTelemetry](https://raw.githubusercontent.com/zackcmariano/AdkTelemetry/main/assets/adktelemetry.png)
+![AdkTelemetry](https://raw.githubusercontent.com/zackcmariano/AdkTelemetry/refs/heads/master/assets/adk-telemetry-lib.png)
 
 > **Observability & FinOps for Google ADK agents — in real time.**
 
