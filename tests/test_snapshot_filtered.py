@@ -14,6 +14,8 @@ def test_snapshot_filtered_empty():
     )
     assert snap["totals"]["sessions"] == 0
     assert snap["totals"]["events"] == 0
+    assert snap["totals"]["total_input_tokens"] == 0
+    assert snap["totals"]["total_output_tokens"] == 0
     assert snap["sessions"] == []
 
 
@@ -56,6 +58,8 @@ def test_snapshot_filtered_counts_events_in_window():
     )
     assert snap["totals"]["sessions"] == 1
     assert snap["totals"]["events"] == 1
+    assert snap["totals"]["total_input_tokens"] == 100
+    assert snap["totals"]["total_output_tokens"] == 10
     assert snap["sessions"][0]["event_count"] == 1
 
     snap_all = store.snapshot_filtered(
@@ -65,3 +69,5 @@ def test_snapshot_filtered_counts_events_in_window():
         pricing_config_path=None,
     )
     assert snap_all["totals"]["events"] == 2
+    assert snap_all["totals"]["total_input_tokens"] == 200
+    assert snap_all["totals"]["total_output_tokens"] == 20

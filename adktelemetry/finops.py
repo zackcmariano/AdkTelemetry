@@ -11,6 +11,32 @@ import yaml
 
 _DEFAULT_YAML = Path(__file__).resolve().parent / "gemini_pricing.yaml"
 
+GEMINI_PRICING_DOC_URL = "https://ai.google.dev/gemini-api/docs/pricing?hl=pt-br"
+
+
+def _catalog_updated_mm_yy(config_path: str | None) -> str:
+    """Month/year (MM/YY) from YAML meta.last_sync_utc, e.g. 2026-04-02 -> 04/26."""
+    p = Path(config_path) if config_path else _DEFAULT_YAML
+    if not p.is_file():
+        return "04/26"
+    try:
+        with p.open(encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
+    except OSError:
+        return "04/26"
+    meta = data.get("meta") if isinstance(data, dict) else None
+    if not isinstance(meta, dict):
+        return "04/26"
+    raw = meta.get("last_sync_utc") or meta.get("last_updated")
+    if not raw or not isinstance(raw, str):
+        return "04/26"
+    m = re.match(r"^(\d{4})-(\d{2})", raw.strip())
+    if not m:
+        return "04/26"
+    year = int(m.group(1))
+    month = int(m.group(2))
+    return f"{month:02d}/{year % 100:02d}"
+
 
 def _normalize_model_id(name: str | None) -> str | None:
     if not name:
@@ -87,3 +113,28 @@ def usage_metadata_to_counts(usage: Any) -> tuple[int, int]:
 
 def list_known_models(config_path: str | None = None) -> list[str]:
     return sorted(_load_table(config_path).keys())
+
+
+def pricing_catalog(config_path: str | None = None) -> dict[str, Any]:
+    """
+    FinOps rows for API/dashboard: USD per 10,000 tokens, derived from YAML rates per 1M tokens.
+    """
+    table = _load_table(config_path)
+    models: list[dict[str, Any]] = []
+    for mid in sorted(table.keys()):
+        row = table[mid]
+        inp_m = float(row["input_per_million_usd"])
+        out_m = float(row["output_per_million_usd"])
+        models.append(
+            {
+                "model_id": mid,
+                "input_usd_per_10k": inp_m / 100.0,
+                "output_usd_per_10k": out_m / 100.0,
+            }
+        )
+    return {
+        "models": models,
+        "unit_label": "USD per 10,000 tokens (text; derived from catalog per-1M rates)",
+        "catalog_updated": _catalog_updated_mm_yy(config_path),
+        "pricing_doc_url": GEMINI_PRICING_DOC_URL,
+    }

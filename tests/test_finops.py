@@ -1,6 +1,6 @@
 import pytest
 
-from adktelemetry.finops import clear_pricing_cache, estimate_interaction_cost_usd
+from adktelemetry.finops import clear_pricing_cache, estimate_interaction_cost_usd, pricing_catalog
 
 
 @pytest.fixture(autouse=True)
@@ -38,3 +38,15 @@ def test_normalize_models_prefix():
     )
     assert mid == "gemini-2.5-flash"
     assert cost == 0.0
+
+
+def test_pricing_catalog_per_10k_from_yaml():
+    cat = pricing_catalog(None)
+    assert "models" in cat
+    assert cat["unit_label"]
+    assert cat.get("catalog_updated") == "04/26"
+    assert "ai.google.dev/gemini-api/docs/pricing" in (cat.get("pricing_doc_url") or "")
+    assert any(m["model_id"] == "gemini-2.5-flash" for m in cat["models"])
+    row = next(m for m in cat["models"] if m["model_id"] == "gemini-2.5-flash")
+    assert abs(row["input_usd_per_10k"] - 0.3 / 100.0) < 1e-9
+    assert abs(row["output_usd_per_10k"] - 2.5 / 100.0) < 1e-9

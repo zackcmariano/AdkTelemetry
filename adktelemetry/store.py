@@ -130,6 +130,8 @@ class TelemetryStore:
             sessions = [s.to_dict() for s in self._sessions.values()]
             sessions.sort(key=lambda x: x["last_timestamp"], reverse=True)
             err_total = sum(s.error_count for s in self._sessions.values())
+            tok_in = sum(s.total_input_tokens for s in self._sessions.values())
+            tok_out = sum(s.total_output_tokens for s in self._sessions.values())
             return {
                 "sessions": sessions[:100],
                 "model_distribution": dict(self._global_models),
@@ -138,8 +140,124 @@ class TelemetryStore:
                     "sessions": len(self._sessions),
                     "events": sum(s.event_count for s in self._sessions.values()),
                     "errors": err_total,
+                    "total_input_tokens": tok_in,
+                    "total_output_tokens": tok_out,
                 },
             }
+
+    def error_breakdown(
+        self, since: float | None, until: float | None
+    ) -> dict[str, Any]:
+        """
+        Aggregate in-memory global error rows by short label for dashboard charts.
+        If since and until are both None, uses the full buffered error list.
+        """
+        with self._lock:
+            errs = list(self._global_errors)
+        windowed: list[dict[str, Any]] = []
+        if since is None and until is None:
+            windowed = errs
+        else:
+            since_f = float(since)
+            until_f = float(until)
+            for e in errs:
+                ts = e.get("ts")
+                if ts is None:
+                    continue
+                try:
+                    t = float(ts)
+                except (TypeError, ValueError):
+                    continue
+                if since_f <= t <= until_f:
+                    windowed.append(e)
+
+        counts: dict[str, int] = defaultdict(int)
+        for e in windowed:
+            label = short_error_label_for_dashboard(e)
+            counts[label] += 1
+
+        total = sum(counts.values())
+        if total == 0:
+            return {"total": 0, "slices": [], "top": None}
+
+        sorted_items = sorted(counts.items(), key=lambda x: (-x[1], x[0]))
+        slices: list[dict[str, Any]] = []
+        for label, cnt in sorted_items:
+            slices.append(
+                {
+                    "label": label,
+                    "count": cnt,
+                    "percent": round(100.0 * cnt / total, 1),
+                }
+            )
+        top = slices[0]
+        top_label = top["label"]
+        top_entries = [
+            e for e in windowed if short_error_label_for_dashboard(e) == top_label
+        ]
+        best_msg = ""
+        for e in top_entries:
+            msg = (e.get("error_message") or "").strip()
+            if len(msg) > len(best_msg):
+                best_msg = msg
+        if not best_msg and top_entries:
+            code = (top_entries[0].get("error_code") or "").strip()
+            best_msg = (
+                f"(No message text in telemetry; error_code={code!r})"
+                if code
+                else "No error message captured for this error class."
+            )
+        elif not best_msg:
+            best_msg = "No error message captured for this error class."
+
+        return {
+            "total": total,
+            "slices": slices,
+            "top": {
+                "label": top["label"],
+                "count": top["count"],
+                "percent": top["percent"],
+                "full_error_log": best_msg,
+            },
+        }
+
+    def session_detail_payload(self, user_id: str, session_id: str) -> dict[str, Any] | None:
+        """Compile a factual session brief from the in-memory event ring buffer (no LLM)."""
+        key = f"{user_id}:{session_id}"
+        with self._lock:
+            if key not in self._events and key not in self._sessions:
+                return None
+            records = [dict(r) for r in self._events.get(key, [])]
+            roll = self._sessions.get(key)
+
+        summary = compile_session_summary_from_records(records)
+        errors_brief = build_errors_brief(records)
+        ts_vals = [_event_ts(r) for r in records]
+        ts_vals = [t for t in ts_vals if t is not None]
+        if ts_vals:
+            start_ts = min(ts_vals)
+            end_ts = max(ts_vals)
+        elif roll is not None:
+            t = float(roll.last_timestamp)
+            start_ts = end_ts = t
+        else:
+            start_ts = None
+            end_ts = None
+
+        return {
+            "session_id": session_id,
+            "user_id": user_id,
+            "summary": summary,
+            "errors_brief": errors_brief,
+            "started_ts": start_ts,
+            "ended_ts": end_ts,
+            "buffer_event_count": len(records),
+            "disclaimer": (
+                "This brief is compiled deterministically from AdkTelemetry's in-memory event buffer "
+                "for this session (no LLM). It reflects only what was captured; older events may have "
+                "been rotated out of the buffer."
+            ),
+        }
 
     def snapshot_filtered(
         self,
@@ -193,6 +311,8 @@ class TelemetryStore:
 
             err_total = sum(int(s["error_count"]) for s in sessions_raw)
             ev_total = sum(int(s["event_count"]) for s in sessions_raw)
+            tok_in = sum(int(s["total_input_tokens"]) for s in sessions_raw)
+            tok_out = sum(int(s["total_output_tokens"]) for s in sessions_raw)
 
             return {
                 "sessions": sessions_out,
@@ -202,6 +322,8 @@ class TelemetryStore:
                     "sessions": len(sessions_raw),
                     "events": ev_total,
                     "errors": err_total,
+                    "total_input_tokens": tok_in,
+                    "total_output_tokens": tok_out,
                 },
             }
 
@@ -320,6 +442,126 @@ def _non_benign_code(code: Any) -> bool:
     if c.endswith(".STOP") or c.endswith("_STOP"):
         return False
     return True
+
+
+_ERR_STATUS_IN_TEXT_RE = re.compile(
+    r"Error:\s*(\d{3})\s+([A-Za-z][A-Za-z0-9_]*)",
+    re.IGNORECASE,
+)
+_ERR_LEADING_HTTP_RE = re.compile(
+    r"^\s*(\d{3})\s+([A-Za-z][A-Za-z0-9_]*)\b",
+)
+
+
+def short_error_label_for_dashboard(entry: dict[str, Any]) -> str:
+    """
+    Short label for error breakdown UI, e.g. 'Error: 404 NOT_FOUND', 'Error: 503 UNAVAILABLE'.
+    """
+    msg = (entry.get("error_message") or "").strip()
+    msg_one_line = " ".join(msg.split())
+    m = _ERR_STATUS_IN_TEXT_RE.search(msg_one_line)
+    if m:
+        return f"Error: {m.group(1)} {m.group(2).upper()}"
+    m2 = _ERR_LEADING_HTTP_RE.match(msg_one_line)
+    if m2:
+        return f"Error: {m2.group(1)} {m2.group(2).upper()}"
+    code = (entry.get("error_code") or "").strip()
+    if code and _non_benign_code(code):
+        return f"Error: {code.upper()}"
+    if msg_one_line:
+        snippet = msg_one_line.split(".")[0].strip()
+        if len(snippet) > 56:
+            snippet = snippet[:53] + "…"
+        if snippet.lower().startswith("error:"):
+            return snippet if len(snippet) <= 72 else snippet[:69] + "…"
+        combined = f"Error: {snippet}"
+        return combined if len(combined) <= 72 else combined[:69] + "…"
+    return "Error: unknown"
+
+
+def _snippet_from_record(rec: dict[str, Any], *, max_len: int = 220) -> str:
+    s = (rec.get("content_text_sample") or "").strip()
+    if not s:
+        tp = rec.get("text_preview")
+        if isinstance(tp, list) and tp:
+            s = " ".join(str(x) for x in tp[:3] if x)
+    s = s.replace("\n", " ").strip()
+    if len(s) > max_len:
+        return s[: max_len - 1] + "…"
+    return s
+
+
+def _sorted_ts_records(records: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    """Events that have a usable timestamp, oldest first."""
+    with_ts: list[tuple[float, dict[str, Any]]] = []
+    for r in records:
+        t = _event_ts(r)
+        if t is not None:
+            with_ts.append((t, r))
+    if not with_ts:
+        return None
+    with_ts.sort(key=lambda x: x[0])
+    return [r for _, r in with_ts]
+
+
+def build_errors_brief(records: list[dict[str, Any]], *, max_msg: int = 200, max_items: int = 3) -> str | None:
+    """Short multi-line summary of error events (truncated); None if none."""
+    sorted_recs = _sorted_ts_records(records)
+    if not sorted_recs:
+        return None
+    err_recs = [r for r in sorted_recs if _record_indicates_error(r)]
+    if not err_recs:
+        return None
+    lines: list[str] = [
+        f"This session has {len(err_recs)} error-class event(s) in the telemetry buffer.",
+    ]
+    for i, r in enumerate(err_recs[:max_items], 1):
+        code = ((r.get("error_code") or "").strip() or "unknown")
+        msg = ((r.get("error_message") or "").strip().replace("\n", " "))
+        if not msg:
+            msg = _snippet_from_record(r, max_len=max_msg)
+        if len(msg) > max_msg:
+            msg = msg[: max_msg - 1] + "…"
+        lines.append(f"{i}. [{code}] {msg}" if msg else f"{i}. [{code}]")
+    if len(err_recs) > max_items:
+        lines.append(f"… and {len(err_recs) - max_items} more (not shown).")
+    return "\n".join(lines)
+
+
+def compile_session_summary_from_records(records: list[dict[str, Any]]) -> str:
+    """
+    Build a short English brief from stored telemetry rows only (no generative model).
+    """
+    if not records:
+        return (
+            "No event rows are present in the telemetry ring buffer for this session. "
+            "Either nothing was captured yet, or older rows were rotated out."
+        )
+
+    sorted_recs = _sorted_ts_records(records)
+    if not sorted_recs:
+        return (
+            "Buffered events have no usable timestamps, so the conversation order cannot be "
+            "reconstructed from telemetry alone."
+        )
+
+    authors_order: list[str] = []
+    seen_a: set[str] = set()
+    for r in sorted_recs:
+        a = (r.get("author") or "").strip() or "unknown"
+        if a not in seen_a:
+            seen_a.add(a)
+            authors_order.append(a)
+
+    tot_in = sum(int((r.get("usage") or {}).get("prompt_token_count") or 0) for r in sorted_recs)
+    tot_out = sum(int((r.get("usage") or {}).get("candidates_token_count") or 0) for r in sorted_recs)
+
+    parts: list[str] = [
+        f"{len(sorted_recs)} event(s) in buffer; authors seen in order: {', '.join(authors_order)}.",
+        f"Token subtotals from buffered rows: {tot_in} input / {tot_out} output.",
+    ]
+
+    return " ".join(parts)
 
 
 def _flatten_jsonish_strings(obj: Any, *, limit: int = 8000) -> str:

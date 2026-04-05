@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import HTTPException, Query
 
-from adktelemetry.finops import list_known_models
+from adktelemetry.finops import list_known_models, pricing_catalog
 from adktelemetry.store import TelemetryStore
 
 _MAX_RANGE_SEC = 31 * 86400
@@ -54,6 +54,19 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       font-size: 0.8rem;
       background: #f9fafb;
       color: var(--muted);
+    }
+    button.pill {
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button.pill:hover {
+      background: #eef2ff;
+      border-color: #c7d2fe;
+      color: var(--text);
+    }
+    button.pill:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
     main {
       padding: 20px 24px 48px;
@@ -125,6 +138,9 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     .cost-session-footer .muted { font-weight: 500; }
     .cost-session-footer .total { font-variant-numeric: tabular-nums; color: var(--text); }
     .bar-fill { height: 100%; background: var(--accent); border-radius: 4px; width: 0%; transition: width .4s ease; }
+    .bar-fill.bar-fill--err { background: #ef4444; }
+    .bar-fill.bar-fill--tok-in { background: #3b82f6; }
+    .bar-fill.bar-fill--tok-out { background: #22c55e; }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-weight: 500; }
@@ -135,6 +151,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     footer { padding: 16px 24px; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
     a { color: var(--accent); }
     .pill.err { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+    button.pill.err:hover {
+      background: #fee2e2;
+      border-color: #fca5a5;
+      color: #7f1d1d;
+    }
     .table-scroll {
       overflow-x: auto;
       overflow-y: auto;
@@ -234,6 +255,222 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     }
     .range-apply:hover { filter: brightness(1.05); }
     .range-err { font-size: 0.75rem; color: #b91c1c; min-height: 1.2em; }
+    a.session-id-link {
+      color: var(--accent);
+      text-decoration: underline;
+      cursor: pointer;
+      word-break: break-all;
+    }
+    a.session-id-link:hover { text-decoration: none; }
+    .session-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+    .session-modal-backdrop.open { display: flex; }
+    .pricing-modal-backdrop { z-index: 320; }
+    .errors-modal-backdrop { z-index: 330; }
+    .errors-pie-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 24px;
+      justify-content: center;
+      margin-top: 4px;
+    }
+    .errors-pie {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: #e5e7eb;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+    }
+    .errors-pie-legend {
+      flex: 1;
+      min-width: 220px;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+    .errors-pie-legend .err-leg-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .errors-top-callout {
+      margin-top: 16px;
+      padding: 12px 14px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      color: #7f1d1d;
+      font-size: 0.86rem;
+      font-weight: 500;
+      line-height: 1.45;
+    }
+    .errors-kv-row {
+      display: grid;
+      grid-template-columns: minmax(10rem, 11rem) 1fr;
+      gap: 8px 12px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+    .errors-kv-row:last-child {
+      margin-bottom: 0;
+    }
+    .errors-kv-key {
+      font-weight: 700;
+      color: #7f1d1d;
+    }
+    .errors-kv-val {
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .errors-kv-log {
+      margin: 0;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      font-weight: 500;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 220px;
+      overflow-y: auto;
+      background: rgba(255, 255, 255, 0.65);
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #fecaca;
+      color: #450a0a;
+    }
+    .session-modal.errors-modal-panel {
+      width: min(75vw, calc(100vw - 24px));
+      max-width: min(75vw, calc(100vw - 24px));
+    }
+    .session-modal.pricing-modal-wide {
+      width: min(90vw, calc(100vw - 24px));
+      max-width: min(90vw, calc(100vw - 24px));
+    }
+    .pricing-catalog-table {
+      width: 100%;
+      font-size: 0.82rem;
+      border-collapse: collapse;
+    }
+    .pricing-catalog-table th,
+    .pricing-catalog-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .pricing-catalog-table th {
+      text-align: left;
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 1;
+      box-shadow: 0 1px 0 var(--border);
+    }
+    .pricing-catalog-table td.mono {
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      word-break: break-all;
+    }
+    .pricing-catalog-table td.num {
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .pricing-table-wrap {
+      max-height: min(52vh, 480px);
+      overflow: auto;
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .session-modal {
+      width: min(75vw, calc(100vw - 24px));
+      height: min(70vh, calc(100vh - 24px));
+      max-width: min(75vw, calc(100vw - 24px));
+      max-height: min(70vh, calc(100vh - 24px));
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.22);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .session-modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 12px;
+    }
+    .session-modal-head h2 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .session-modal-close {
+      border: none;
+      background: #f3f4f6;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+      color: var(--text);
+      flex-shrink: 0;
+    }
+    .session-modal-close:hover { background: #e5e7eb; }
+    .session-modal-body {
+      padding: 12px 14px 14px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+      font-size: 0.86rem;
+      line-height: 1.5;
+    }
+    .session-modal-body .mono { font-family: ui-monospace, monospace; font-size: 0.8rem; word-break: break-all; }
+    .session-modal-body .times { margin: 8px 0; font-weight: 500; color: var(--text); }
+    .session-modal-body .summary { margin: 0; color: #374151; }
+    .session-modal-body .errors-brief {
+      margin: 12px 0 0;
+      padding: 10px 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      color: #7f1d1d;
+      font-size: 0.84rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+      display: none;
+    }
+    .session-modal-body .errors-brief.visible { display: block; }
+    .session-modal-body .foot { margin-top: 10px; font-size: 0.75rem; }
+    @media (max-width: 640px) {
+      .session-modal {
+        width: min(92vw, calc(100vw - 24px));
+        height: min(88vh, calc(100vh - 24px));
+        max-width: min(92vw, calc(100vw - 24px));
+        max-height: min(88vh, calc(100vh - 24px));
+      }
+      .session-modal.errors-modal-panel {
+        width: min(75vw, calc(100vw - 24px));
+        max-width: min(75vw, calc(100vw - 24px));
+      }
+    }
   </style>
 </head>
 <body>
@@ -241,8 +478,12 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     <h1>AdkTelemetry</h1>
     <div class="toolbar">
       <span class="pill" id="pill-sessions">Sessions -</span>
-      <span class="pill err" id="pill-errors">Errors -</span>
-      <span class="pill" id="pill-models">Models in catalog -</span>
+      <button type="button" class="pill err" id="pill-errors" aria-haspopup="dialog" aria-expanded="false" title="Open error breakdown for the selected time range">
+        Errors -
+      </button>
+      <button type="button" class="pill" id="pill-models" aria-haspopup="dialog" aria-expanded="false" title="Open Gemini FinOps rates (USD per 10K tokens)">
+        Models in catalog -
+      </button>
       <div class="range-wrap" id="range-wrap">
         <button type="button" class="range-trigger" id="range-trigger" aria-expanded="false" aria-haspopup="listbox">
           <span id="range-label">Last 15 minutes</span>
@@ -320,13 +561,75 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
   </main>
   <footer>
-    FinOps rates ship with the library (<code>adktelemetry/gemini_pricing.yaml</code>). Update each release from
+    These FinOps values ​​in AdkTelemetry were updated on 04/26 (month/year). Updated prices
     <a href="https://ai.google.dev/gemini-api/docs/pricing?hl=pt-br" target="_blank" rel="noopener">Gemini API pricing</a>.
   </footer>
+  <div id="session-modal-backdrop" class="session-modal-backdrop" aria-hidden="true">
+    <div class="session-modal" id="session-modal-panel" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
+      <div class="session-modal-head">
+        <h2 id="session-modal-title">Session detail</h2>
+        <button type="button" class="session-modal-close" id="session-modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="session-modal-body">
+        <div id="session-modal-id" class="mono"></div>
+        <div id="session-modal-times" class="times"></div>
+        <p id="session-modal-summary" class="summary"></p>
+        <div id="session-modal-errors" class="errors-brief" aria-live="polite"></div>
+        <p id="session-modal-footnote" class="foot muted"></p>
+      </div>
+    </div>
+  </div>
+  <div id="pricing-modal-backdrop" class="session-modal-backdrop pricing-modal-backdrop" aria-hidden="true">
+    <div class="session-modal pricing-modal-wide" id="pricing-modal-panel" role="dialog" aria-modal="true" aria-labelledby="pricing-modal-title">
+      <div class="session-modal-head">
+        <h2 id="pricing-modal-title">Gemini FinOps catalog</h2>
+        <button type="button" class="session-modal-close" id="pricing-modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="session-modal-body">
+        <p class="muted" style="margin:0 0 4px" id="pricing-modal-unit"></p>
+        <div class="pricing-table-wrap">
+          <table class="pricing-catalog-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th style="text-align:right">Input USD / 10K</th>
+                <th style="text-align:right">Output USD / 10K</th>
+              </tr>
+            </thead>
+            <tbody id="pricing-modal-rows"></tbody>
+          </table>
+        </div>
+        <p class="foot muted" id="pricing-modal-foot" style="margin-top:12px"></p>
+      </div>
+    </div>
+  </div>
+  <div id="errors-modal-backdrop" class="session-modal-backdrop errors-modal-backdrop" aria-hidden="true">
+    <div class="session-modal errors-modal-panel" id="errors-modal-panel" role="dialog" aria-modal="true" aria-labelledby="errors-modal-title">
+      <div class="session-modal-head">
+        <h2 id="errors-modal-title">Error breakdown</h2>
+        <button type="button" class="session-modal-close" id="errors-modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="session-modal-body">
+        <p class="muted" style="margin:0 0 8px" id="errors-modal-hint"></p>
+        <div class="errors-pie-row">
+          <div class="errors-pie" id="errors-pie-chart" aria-hidden="true"></div>
+          <div class="errors-pie-legend" id="errors-pie-legend"></div>
+        </div>
+        <div id="errors-top-callout" class="errors-top-callout" style="display: none"></div>
+      </div>
+    </div>
+  </div>
   <script>
     // Caminho absoluto: com URL /adktelemetry (sem barra final), "./api/..." virava /api/... (404).
     const API = "/adktelemetry/api/v1/snapshot";
+    const SESSION_DETAIL_API = "/adktelemetry/api/v1/session_detail";
+    const PRICING_CATALOG_API = "/adktelemetry/api/v1/pricing_catalog";
+    const ERROR_BREAKDOWN_API = "/adktelemetry/api/v1/error_breakdown";
     const colors = ["#22c55e","#3b82f6","#f97316","#ec4899","#a855f7","#14b8a6"];
+    const errorPieColors = [
+      "#b91c1c","#dc2626","#ef4444","#f43f5e","#e11d48","#ec4899","#db2777",
+      "#d946ef","#c026d3","#a855f7","#9333ea","#7c3aed","#6d28d9","#5b21b6","#4c1d95",
+    ];
     const RANGE_LABELS = { "15m": "Last 15 minutes", "30m": "Last 30 minutes", "1h": "Last 1 hour", "12h": "Last 12 hours" };
     let rangePreset = "15m";
     let useCustomRange = false;
@@ -453,12 +756,18 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       el.style.background = "conic-gradient(" + stops.join(", ") + ")";
     }
 
-    function appendBarRow(container, label, value, maxVal) {
+    function appendBarRow(container, label, value, maxVal, variant) {
       const row = document.createElement("div");
       row.className = "bar-row";
       const pct = Math.round(100 * (Number(value) || 0) / maxVal);
+      let fillClass = "bar-fill";
+      if (variant === "error") fillClass += " bar-fill--err";
+      else if (variant === "tok-in") fillClass += " bar-fill--tok-in";
+      else if (variant === "tok-out") fillClass += " bar-fill--tok-out";
       row.innerHTML =
-        '<div></div><div class="bar-track"><div class="bar-fill" style="width:' +
+        '<div></div><div class="bar-track"><div class="' +
+        fillClass +
+        '" style="width:' +
         pct +
         '%"></div></div><div></div>';
       row.children[0].textContent = label;
@@ -469,8 +778,16 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     function appendSessionRow(tbody, s) {
       const tr = document.createElement("tr");
       if (Number(s.error_count) > 0) tr.className = "session-has-errors";
+      const td0 = document.createElement("td");
+      const link = document.createElement("a");
+      link.href = "#";
+      link.className = "session-id-link";
+      link.textContent = s.session_id || "";
+      link.dataset.sessionId = s.session_id || "";
+      link.dataset.userId = s.user_id || "";
+      td0.appendChild(link);
+      tr.appendChild(td0);
       const cells = [
-        s.session_id,
         s.user_id,
         s.event_count,
         s.error_count,
@@ -532,11 +849,17 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         });
 
         const events = (data.totals && data.totals.events) || 0;
-        const src = { adk: events };
-        const smax = maxObj(src);
+        const errTotal = (data.totals && data.totals.errors) || 0;
+        const inTok = (data.totals && data.totals.total_input_tokens) || 0;
+        const outTok = (data.totals && data.totals.total_output_tokens) || 0;
+        const smaxEv = maxObj({ adk: events, errors: errTotal });
+        const smaxTok = maxObj({ in: inTok, out: outTok });
         const bs = document.getElementById("bar-sources");
         bs.textContent = "";
-        Object.entries(src).forEach(([k, v]) => appendBarRow(bs, k, v, smax));
+        appendBarRow(bs, "adk", events, smaxEv, null);
+        appendBarRow(bs, "errors", errTotal, smaxEv, "error");
+        appendBarRow(bs, "in tok", inTok, smaxTok, "tok-in");
+        appendBarRow(bs, "out tok", outTok, smaxTok, "tok-out");
 
         const sessions = Array.isArray(data.sessions) ? data.sessions : [];
         const costs = sessions.map((s) => Number(s.total_cost_usd) || 0);
@@ -625,6 +948,310 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         console.error("AdkTelemetry refresh:", e);
       }
     }
+    function formatLocalTs(sec) {
+      if (sec == null || sec === "" || !isFinite(Number(sec))) return "—";
+      return new Date(Number(sec) * 1000).toLocaleString(undefined, {
+        dateStyle: "short",
+        timeStyle: "medium",
+      });
+    }
+
+    function closeSessionModal() {
+      const backdrop = document.getElementById("session-modal-backdrop");
+      if (backdrop) {
+        backdrop.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    function formatUsdPer10k(n) {
+      const x = Number(n);
+      if (!isFinite(x)) return "—";
+      return x.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 8 });
+    }
+
+    function setPricingModalFooter(data) {
+      const footEl = document.getElementById("pricing-modal-foot");
+      if (!footEl) return;
+      footEl.textContent = "";
+      const updated = (data && data.catalog_updated) || "04/26";
+      const url =
+        (data && data.pricing_doc_url) ||
+        "https://ai.google.dev/gemini-api/docs/pricing?hl=pt-br";
+      footEl.appendChild(
+        document.createTextNode(
+          "These FinOps values in AdkTelemetry were last updated in " +
+            updated +
+            " (month/year). After that date, consult Google's official "
+        )
+      );
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = "Gemini API pricing";
+      footEl.appendChild(a);
+      footEl.appendChild(
+        document.createTextNode(
+          ". Tiered or modality-specific pricing may differ from these reference rates."
+        )
+      );
+    }
+
+    function closePricingModal() {
+      const backdrop = document.getElementById("pricing-modal-backdrop");
+      const pill = document.getElementById("pill-models");
+      if (backdrop) {
+        backdrop.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+      }
+      if (pill) pill.setAttribute("aria-expanded", "false");
+    }
+
+    function setErrorPieFromSlices(el, slices, total) {
+      if (!el) return;
+      if (!total || !slices.length) {
+        el.style.background = "#e5e7eb";
+        return;
+      }
+      let acc = 0;
+      const parts = slices.map(function (s, i) {
+        const pct = (100 * s.count) / total;
+        const start = acc;
+        acc += pct;
+        const c = errorPieColors[i % errorPieColors.length];
+        return c + " " + start + "% " + acc + "%";
+      });
+      el.style.background = "conic-gradient(" + parts.join(", ") + ")";
+    }
+
+    function closeErrorsModal() {
+      const backdrop = document.getElementById("errors-modal-backdrop");
+      const pill = document.getElementById("pill-errors");
+      if (backdrop) {
+        backdrop.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+      }
+      if (pill) pill.setAttribute("aria-expanded", "false");
+    }
+
+    function renderErrorsTopCallout(container, top) {
+      container.textContent = "";
+      container.style.display = "block";
+      function addRow(keyText, valueText, usePre) {
+        const row = document.createElement("div");
+        row.className = "errors-kv-row";
+        const k = document.createElement("span");
+        k.className = "errors-kv-key";
+        k.textContent = keyText;
+        const v = document.createElement(usePre ? "pre" : "span");
+        v.className = usePre ? "errors-kv-log" : "errors-kv-val";
+        v.textContent = valueText;
+        row.appendChild(k);
+        row.appendChild(v);
+        container.appendChild(row);
+      }
+      addRow("Most frequent:", top.label || "—", false);
+      addRow("Event(s):", top.count != null ? String(top.count) : "—", false);
+      addRow("% of total errors:", top.percent != null ? String(top.percent) + "%" : "—", false);
+      addRow(
+        "Full error log:",
+        top.full_error_log != null && top.full_error_log !== "" ? top.full_error_log : "—",
+        true
+      );
+    }
+
+    async function openErrorsModal() {
+      const backdrop = document.getElementById("errors-modal-backdrop");
+      const pie = document.getElementById("errors-pie-chart");
+      const leg = document.getElementById("errors-pie-legend");
+      const hint = document.getElementById("errors-modal-hint");
+      const topBox = document.getElementById("errors-top-callout");
+      const pill = document.getElementById("pill-errors");
+      if (!backdrop || !pie || !leg || !hint || !topBox) return;
+      leg.textContent = "";
+      topBox.style.display = "none";
+      topBox.textContent = "";
+      hint.textContent = "Loading…";
+      pie.style.background = "#e5e7eb";
+      backdrop.classList.add("open");
+      backdrop.setAttribute("aria-hidden", "false");
+      if (pill) pill.setAttribute("aria-expanded", "true");
+      try {
+        const r = await fetch(ERROR_BREAKDOWN_API + "?" + snapshotQuery(), { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        hint.textContent =
+          "Total number of errors that occurred in the sessions: " +
+          (data.total != null ? data.total : 0) +
+          ".";
+        if (!data.total) {
+          setErrorPieFromSlices(pie, [], 0);
+          const p = document.createElement("p");
+          p.className = "muted";
+          p.style.margin = "8px 0 0";
+          p.textContent = "No errors in the selected time range.";
+          leg.appendChild(p);
+          return;
+        }
+        setErrorPieFromSlices(pie, data.slices || [], data.total);
+        (data.slices || []).forEach(function (s, i) {
+          const row = document.createElement("div");
+          row.className = "err-leg-row";
+          const sw = document.createElement("span");
+          sw.style.cssText =
+            "display:inline-block;width:12px;height:12px;border-radius:3px;margin-top:4px;flex-shrink:0;background:" +
+            errorPieColors[i % errorPieColors.length];
+          const txt = document.createElement("span");
+          txt.textContent = s.label + " — " + s.percent + "% (" + s.count + ")";
+          row.appendChild(sw);
+          row.appendChild(txt);
+          leg.appendChild(row);
+        });
+        const top = data.top;
+        if (top) {
+          renderErrorsTopCallout(topBox, top);
+        }
+      } catch (e) {
+        hint.textContent =
+          "Could not load error breakdown. " + (e && e.message ? e.message : String(e));
+        setErrorPieFromSlices(pie, [], 0);
+      }
+    }
+
+    async function openPricingModal() {
+      const backdrop = document.getElementById("pricing-modal-backdrop");
+      const tbody = document.getElementById("pricing-modal-rows");
+      const unitEl = document.getElementById("pricing-modal-unit");
+      const footEl = document.getElementById("pricing-modal-foot");
+      const pill = document.getElementById("pill-models");
+      if (!backdrop || !tbody) return;
+      tbody.textContent = "";
+      if (unitEl) unitEl.textContent = "Loading catalog…";
+      if (footEl) footEl.textContent = "";
+      backdrop.classList.add("open");
+      backdrop.setAttribute("aria-hidden", "false");
+      if (pill) pill.setAttribute("aria-expanded", "true");
+      try {
+        const r = await fetch(PRICING_CATALOG_API, { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        if (unitEl) unitEl.textContent = data.unit_label || "";
+        setPricingModalFooter(data);
+        const models = Array.isArray(data.models) ? data.models : [];
+        models.forEach(function (m) {
+          const tr = document.createElement("tr");
+          const tdId = document.createElement("td");
+          tdId.className = "mono";
+          tdId.textContent = m.model_id || "";
+          const tdIn = document.createElement("td");
+          tdIn.className = "num";
+          tdIn.textContent = formatUsdPer10k(m.input_usd_per_10k);
+          const tdOut = document.createElement("td");
+          tdOut.className = "num";
+          tdOut.textContent = formatUsdPer10k(m.output_usd_per_10k);
+          tr.appendChild(tdId);
+          tr.appendChild(tdIn);
+          tr.appendChild(tdOut);
+          tbody.appendChild(tr);
+        });
+        if (!models.length && unitEl) unitEl.textContent = "No models in catalog.";
+      } catch (e) {
+        if (footEl) footEl.textContent = "";
+        if (unitEl)
+          unitEl.textContent =
+            "Could not load catalog. " + (e && e.message ? e.message : String(e));
+      }
+    }
+
+    async function openSessionModal(sessionId, userId) {
+      const backdrop = document.getElementById("session-modal-backdrop");
+      const msummary = document.getElementById("session-modal-summary");
+      const merrors = document.getElementById("session-modal-errors");
+      const mtimes = document.getElementById("session-modal-times");
+      const mid = document.getElementById("session-modal-id");
+      const mfoot = document.getElementById("session-modal-footnote");
+      if (!backdrop || !msummary) return;
+      mid.textContent = sessionId || "";
+      msummary.textContent = "Loading…";
+      mtimes.textContent = "";
+      mfoot.textContent = "";
+      if (merrors) {
+        merrors.textContent = "";
+        merrors.classList.remove("visible");
+      }
+      backdrop.classList.add("open");
+      backdrop.setAttribute("aria-hidden", "false");
+      try {
+        const q = new URLSearchParams({ session_id: sessionId, user_id: userId });
+        const r = await fetch(SESSION_DETAIL_API + "?" + q.toString(), { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        mid.textContent = (data.session_id || "") + " · user " + (data.user_id || "");
+        msummary.textContent = data.summary || "";
+        mtimes.textContent =
+          "Conversation start (first buffered event): " +
+          formatLocalTs(data.started_ts) +
+          " — Last activity (last buffered event): " +
+          formatLocalTs(data.ended_ts);
+        if (merrors) {
+          if (data.errors_brief) {
+            merrors.textContent = data.errors_brief;
+            merrors.classList.add("visible");
+          } else {
+            merrors.textContent = "";
+            merrors.classList.remove("visible");
+          }
+        }
+        mfoot.textContent = data.disclaimer || "";
+      } catch (e) {
+        msummary.textContent =
+          "Could not load session detail. " + (e && e.message ? e.message : String(e));
+      }
+    }
+
+    document.getElementById("session-modal-backdrop").addEventListener("click", closeSessionModal);
+    document.getElementById("session-modal-panel").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+    document.getElementById("session-modal-close").addEventListener("click", closeSessionModal);
+    document.getElementById("pricing-modal-backdrop").addEventListener("click", closePricingModal);
+    document.getElementById("pricing-modal-panel").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+    document.getElementById("pricing-modal-close").addEventListener("click", closePricingModal);
+    document.getElementById("errors-modal-backdrop").addEventListener("click", closeErrorsModal);
+    document.getElementById("errors-modal-panel").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+    document.getElementById("errors-modal-close").addEventListener("click", closeErrorsModal);
+    document.getElementById("pill-models").addEventListener("click", function () {
+      openPricingModal();
+    });
+    document.getElementById("pill-errors").addEventListener("click", function () {
+      openErrorsModal();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Escape") return;
+      const eb = document.getElementById("errors-modal-backdrop");
+      if (eb && eb.classList.contains("open")) {
+        closeErrorsModal();
+        return;
+      }
+      const pb = document.getElementById("pricing-modal-backdrop");
+      if (pb && pb.classList.contains("open")) {
+        closePricingModal();
+        return;
+      }
+      closeSessionModal();
+    });
+    document.getElementById("session-rows").addEventListener("click", function (ev) {
+      const a = ev.target.closest("a.session-id-link");
+      if (!a) return;
+      ev.preventDefault();
+      openSessionModal(a.dataset.sessionId, a.dataset.userId);
+    });
+
     updateRangeLabel();
     refresh();
     setInterval(refresh, 4000);
@@ -686,5 +1313,58 @@ def register_routes(app: Any) -> None:
 
         snap["pricing_models"] = len(list_known_models(pricing_path))
         return JSONResponse(content=json.loads(json.dumps(snap, default=str)))
+
+    @app.get("/adktelemetry/api/v1/pricing_catalog", include_in_schema=False)
+    async def pricing_catalog_api() -> Any:
+        from fastapi.responses import JSONResponse
+
+        from adktelemetry.config import get_config
+
+        cfg = get_config()
+        pricing_path = cfg.pricing_config_path if cfg else None
+        payload = pricing_catalog(pricing_path)
+        return JSONResponse(content=json.loads(json.dumps(payload, default=str)))
+
+    @app.get("/adktelemetry/api/v1/error_breakdown", include_in_schema=False)
+    async def error_breakdown_api(
+        since: float | None = Query(None, description="Range start (Unix seconds)"),
+        until: float | None = Query(None, description="Range end (Unix seconds)"),
+    ) -> Any:
+        from fastapi.responses import JSONResponse
+
+        now = time.time()
+        if since is None and until is None:
+            payload = TelemetryStore.instance().error_breakdown(None, None)
+            return JSONResponse(content=json.loads(json.dumps(payload, default=str)))
+
+        until_f = float(until) if until is not None else now
+        since_f = float(since) if since is not None else (until_f - 15 * 60)
+        if since_f >= until_f:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid range: `since` must be less than `until`.",
+            )
+        if until_f - since_f > _MAX_RANGE_SEC:
+            raise HTTPException(
+                status_code=400,
+                detail="Time range cannot exceed 31 days.",
+            )
+        payload = TelemetryStore.instance().error_breakdown(since_f, until_f)
+        return JSONResponse(content=json.loads(json.dumps(payload, default=str)))
+
+    @app.get("/adktelemetry/api/v1/session_detail", include_in_schema=False)
+    async def session_detail(
+        session_id: str = Query(..., min_length=1),
+        user_id: str = Query(..., min_length=1),
+    ) -> Any:
+        from fastapi.responses import JSONResponse
+
+        payload = TelemetryStore.instance().session_detail_payload(user_id, session_id)
+        if payload is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Session not found in telemetry store.",
+            )
+        return JSONResponse(content=json.loads(json.dumps(payload, default=str)))
 
     app.state.adktelemetry_registered = True
