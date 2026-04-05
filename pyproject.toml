@@ -3,7 +3,7 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "AdkTelemetry"
+name = "adktelemetry"
 version = "0.1.0"
 description = "Library for Google ADK focused on observability, telemetry, session tracing, and operational cost analysis for AI agents."
 readme = "README.md"

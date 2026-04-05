@@ -4,6 +4,8 @@
 
 > **Observability & FinOps for Google ADK agents - in real time.**
 
+**AdkTelemetry** is the product name. On PyPI the distribution is **`adktelemetry`** (all lowercase): use `pip install adktelemetry` and `import adktelemetry` in code.
+
 AdkTelemetry is a **Python library for Google ADK** that captures **runner events**, **token usage**, **estimated USD cost**, and **error signals**, then exposes them through a **built-in dashboard** and **JSON APIs**.
 
 **Dashboard URL** (example with `adk web` on port 8080): `http://localhost:8080/adktelemetry`
@@ -13,7 +15,7 @@ AdkTelemetry is a **Python library for Google ADK** that captures **runner event
 ## Installation
 
 ```bash
-pip install AdkTelemetry
+pip install adktelemetry
 ```
 
 ---
