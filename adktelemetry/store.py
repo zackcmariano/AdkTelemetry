@@ -132,6 +132,11 @@ class TelemetryStore:
             err_total = sum(s.error_count for s in self._sessions.values())
             tok_in = sum(s.total_input_tokens for s in self._sessions.values())
             tok_out = sum(s.total_output_tokens for s in self._sessions.values())
+            cost_sum = sum(float(s.total_cost_usd) for s in self._sessions.values())
+            if self._sessions:
+                last_ix = max(float(s.last_timestamp) for s in self._sessions.values())
+            else:
+                last_ix = None
             return {
                 "sessions": sessions[:100],
                 "model_distribution": dict(self._global_models),
@@ -142,6 +147,8 @@ class TelemetryStore:
                     "errors": err_total,
                     "total_input_tokens": tok_in,
                     "total_output_tokens": tok_out,
+                    "total_cost_usd": round(cost_sum, 8),
+                    "last_interaction_ts": last_ix,
                 },
             }
 
@@ -244,10 +251,36 @@ class TelemetryStore:
             start_ts = None
             end_ts = None
 
+        stats: dict[str, Any] | None = None
+        sorted_recs = _sorted_ts_records(records)
+        if sorted_recs is not None:
+            authors_order: list[str] = []
+            seen_a: set[str] = set()
+            for r in sorted_recs:
+                a = (r.get("author") or "").strip() or "unknown"
+                if a not in seen_a:
+                    seen_a.add(a)
+                    authors_order.append(a)
+            tot_in = sum(
+                int((r.get("usage") or {}).get("prompt_token_count") or 0) for r in sorted_recs
+            )
+            tot_out = sum(
+                int((r.get("usage") or {}).get("candidates_token_count") or 0)
+                for r in sorted_recs
+            )
+            stats = {
+                "available": True,
+                "buffer_events": len(sorted_recs),
+                "authors_seen": authors_order,
+                "tokens_input": tot_in,
+                "tokens_output": tot_out,
+            }
+
         return {
             "session_id": session_id,
             "user_id": user_id,
             "summary": summary,
+            "stats": stats,
             "errors_brief": errors_brief,
             "started_ts": start_ts,
             "ended_ts": end_ts,
@@ -313,6 +346,12 @@ class TelemetryStore:
             ev_total = sum(int(s["event_count"]) for s in sessions_raw)
             tok_in = sum(int(s["total_input_tokens"]) for s in sessions_raw)
             tok_out = sum(int(s["total_output_tokens"]) for s in sessions_raw)
+            if sessions_raw:
+                cost_sum = sum(float(s["total_cost_usd"]) for s in sessions_raw)
+                last_ix = max(float(s["last_timestamp"]) for s in sessions_raw)
+            else:
+                cost_sum = 0.0
+                last_ix = None
 
             return {
                 "sessions": sessions_out,
@@ -324,6 +363,8 @@ class TelemetryStore:
                     "errors": err_total,
                     "total_input_tokens": tok_in,
                     "total_output_tokens": tok_out,
+                    "total_cost_usd": round(cost_sum, 8),
+                    "last_interaction_ts": last_ix,
                 },
             }
 

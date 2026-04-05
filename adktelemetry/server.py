@@ -275,6 +275,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     .session-modal-backdrop.open { display: flex; }
     .pricing-modal-backdrop { z-index: 320; }
     .errors-modal-backdrop { z-index: 330; }
+    .sessions-overview-backdrop { z-index: 327; }
+    .session-modal.sessions-overview-panel {
+      width: min(75vw, calc(100vw - 24px));
+      max-width: min(75vw, calc(100vw - 24px));
+    }
     .errors-pie-row {
       display: flex;
       flex-wrap: wrap;
@@ -355,8 +360,8 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       max-width: min(75vw, calc(100vw - 24px));
     }
     .session-modal.pricing-modal-wide {
-      width: min(90vw, calc(100vw - 24px));
-      max-width: min(90vw, calc(100vw - 24px));
+      width: min(75vw, calc(100vw - 24px));
+      max-width: min(75vw, calc(100vw - 24px));
     }
     .pricing-catalog-table {
       width: 100%;
@@ -444,6 +449,41 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     .session-modal-body .mono { font-family: ui-monospace, monospace; font-size: 0.8rem; word-break: break-all; }
     .session-modal-body .times { margin: 8px 0; font-weight: 500; color: var(--text); }
     .session-modal-body .summary { margin: 0; color: #374151; }
+    .session-detail-kv {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+    .session-detail-kv .session-kv-row {
+      display: grid;
+      grid-template-columns: minmax(11rem, 15rem) 1fr;
+      gap: 8px 12px;
+      align-items: start;
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+    .session-detail-kv .session-kv-key {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .session-detail-kv .session-kv-val {
+      color: #374151;
+      word-break: break-word;
+    }
+    .session-detail-kv .session-kv-val.mono {
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+    }
+    .session-detail-kv pre.session-kv-val {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.84rem;
+      color: #374151;
+      line-height: 1.45;
+    }
     .session-modal-body .errors-brief {
       margin: 12px 0 0;
       padding: 10px 12px;
@@ -470,6 +510,14 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         width: min(75vw, calc(100vw - 24px));
         max-width: min(75vw, calc(100vw - 24px));
       }
+      .session-modal.pricing-modal-wide {
+        width: min(75vw, calc(100vw - 24px));
+        max-width: min(75vw, calc(100vw - 24px));
+      }
+      .session-modal.sessions-overview-panel {
+        width: min(75vw, calc(100vw - 24px));
+        max-width: min(75vw, calc(100vw - 24px));
+      }
     }
   </style>
 </head>
@@ -477,7 +525,9 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   <header>
     <h1>AdkTelemetry</h1>
     <div class="toolbar">
-      <span class="pill" id="pill-sessions">Sessions -</span>
+      <button type="button" class="pill" id="pill-sessions" aria-haspopup="dialog" aria-expanded="false" title="Open sessions overview for the selected time range">
+        Sessions -
+      </button>
       <button type="button" class="pill err" id="pill-errors" aria-haspopup="dialog" aria-expanded="false" title="Open error breakdown for the selected time range">
         Errors -
       </button>
@@ -571,9 +621,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         <button type="button" class="session-modal-close" id="session-modal-close" aria-label="Close">×</button>
       </div>
       <div class="session-modal-body">
-        <div id="session-modal-id" class="mono"></div>
-        <div id="session-modal-times" class="times"></div>
-        <p id="session-modal-summary" class="summary"></p>
+        <div id="session-modal-kv" class="session-detail-kv"></div>
         <div id="session-modal-errors" class="errors-brief" aria-live="polite"></div>
         <p id="session-modal-footnote" class="foot muted"></p>
       </div>
@@ -616,6 +664,18 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
           <div class="errors-pie-legend" id="errors-pie-legend"></div>
         </div>
         <div id="errors-top-callout" class="errors-top-callout" style="display: none"></div>
+      </div>
+    </div>
+  </div>
+  <div id="sessions-overview-backdrop" class="session-modal-backdrop sessions-overview-backdrop" aria-hidden="true">
+    <div class="session-modal sessions-overview-panel" id="sessions-overview-panel" role="dialog" aria-modal="true" aria-labelledby="sessions-overview-title">
+      <div class="session-modal-head">
+        <h2 id="sessions-overview-title">Sessions overview</h2>
+        <button type="button" class="session-modal-close" id="sessions-overview-close" aria-label="Close">×</button>
+      </div>
+      <div class="session-modal-body">
+        <p class="muted" style="margin:0 0 10px" id="sessions-overview-hint"></p>
+        <div id="sessions-overview-kv" class="session-detail-kv"></div>
       </div>
     </div>
   </div>
@@ -1035,6 +1095,66 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       if (pill) pill.setAttribute("aria-expanded", "false");
     }
 
+    function closeSessionsOverviewModal() {
+      const backdrop = document.getElementById("sessions-overview-backdrop");
+      const pill = document.getElementById("pill-sessions");
+      if (backdrop) {
+        backdrop.classList.remove("open");
+        backdrop.setAttribute("aria-hidden", "true");
+      }
+      if (pill) pill.setAttribute("aria-expanded", "false");
+    }
+
+    async function openSessionsOverviewModal() {
+      const backdrop = document.getElementById("sessions-overview-backdrop");
+      const kv = document.getElementById("sessions-overview-kv");
+      const hint = document.getElementById("sessions-overview-hint");
+      const pill = document.getElementById("pill-sessions");
+      if (!backdrop || !kv || !hint) return;
+      kv.textContent = "";
+      hint.textContent = "Loading…";
+      backdrop.classList.add("open");
+      backdrop.setAttribute("aria-hidden", "false");
+      if (pill) pill.setAttribute("aria-expanded", "true");
+      try {
+        const r = await fetch(API + "?" + snapshotQuery(), { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        hint.textContent =
+          "Aggregates for the selected time range (dashboard clock, top-right). " +
+          "Last interaction is the latest session activity timestamp in that window.";
+        kv.textContent = "";
+        const t = data.totals || {};
+        const nSessions = t.sessions != null ? t.sessions : 0;
+        const inTok = t.total_input_tokens != null ? t.total_input_tokens : 0;
+        const outTok = t.total_output_tokens != null ? t.total_output_tokens : 0;
+        const cost = t.total_cost_usd != null ? Number(t.total_cost_usd) : 0;
+        const lastTs = t.last_interaction_ts;
+        addSessionKvRow(kv, "Number of sessions:", String(nSessions), false, false);
+        addSessionKvRow(kv, "Total input tokens:", String(inTok), false, false);
+        addSessionKvRow(kv, "Total output tokens:", String(outTok), false, false);
+        addSessionKvRow(kv, "Total cost (USD):", cost.toFixed(6), false, false);
+        addSessionKvRow(
+          kv,
+          "Last interaction with the agent:",
+          lastTs != null && lastTs !== "" && isFinite(Number(lastTs))
+            ? formatLocalTs(lastTs)
+            : "—",
+          false,
+          false
+        );
+      } catch (e) {
+        hint.textContent = "";
+        addSessionKvRow(
+          kv,
+          "Error:",
+          "Could not load sessions overview. " + (e && e.message ? e.message : String(e)),
+          true,
+          false
+        );
+      }
+    }
+
     function renderErrorsTopCallout(container, top) {
       container.textContent = "";
       container.style.display = "block";
@@ -1164,17 +1284,77 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       }
     }
 
+    function addSessionKvRow(container, keyText, valueText, usePre, monoVal) {
+      const row = document.createElement("div");
+      row.className = "session-kv-row";
+      const k = document.createElement("span");
+      k.className = "session-kv-key";
+      k.textContent = keyText;
+      let v;
+      if (usePre) {
+        v = document.createElement("pre");
+        v.className = "session-kv-val";
+      } else {
+        v = document.createElement("span");
+        v.className = "session-kv-val" + (monoVal ? " mono" : "");
+      }
+      v.textContent = valueText;
+      row.appendChild(k);
+      row.appendChild(v);
+      container.appendChild(row);
+    }
+
+    function fillSessionModalKv(container, data, errorText) {
+      container.textContent = "";
+      if (errorText) {
+        addSessionKvRow(container, "Error:", errorText, true, false);
+        return;
+      }
+      addSessionKvRow(container, "Session ID:", data.session_id || "", false, true);
+      addSessionKvRow(container, "User:", data.user_id || "", false, false);
+      addSessionKvRow(
+        container,
+        "Conversation start (first buffered event):",
+        formatLocalTs(data.started_ts),
+        false,
+        false
+      );
+      addSessionKvRow(
+        container,
+        "Last activity (last buffered event):",
+        formatLocalTs(data.ended_ts),
+        false,
+        false
+      );
+      const st = data.stats;
+      if (st && st.available) {
+        addSessionKvRow(container, "Events in buffer:", String(st.buffer_events), false, false);
+        addSessionKvRow(
+          container,
+          "Authors seen (order):",
+          Array.isArray(st.authors_seen) ? st.authors_seen.join(", ") : "",
+          false,
+          false
+        );
+        addSessionKvRow(container, "Input tokens (buffer):", String(st.tokens_input), false, false);
+        addSessionKvRow(container, "Output tokens (buffer):", String(st.tokens_output), false, false);
+      } else {
+        addSessionKvRow(container, "Buffer summary:", data.summary || "—", true, false);
+      }
+    }
+
     async function openSessionModal(sessionId, userId) {
       const backdrop = document.getElementById("session-modal-backdrop");
-      const msummary = document.getElementById("session-modal-summary");
+      const mkv = document.getElementById("session-modal-kv");
       const merrors = document.getElementById("session-modal-errors");
-      const mtimes = document.getElementById("session-modal-times");
-      const mid = document.getElementById("session-modal-id");
       const mfoot = document.getElementById("session-modal-footnote");
-      if (!backdrop || !msummary) return;
-      mid.textContent = sessionId || "";
-      msummary.textContent = "Loading…";
-      mtimes.textContent = "";
+      if (!backdrop || !mkv) return;
+      mkv.textContent = "";
+      const load = document.createElement("p");
+      load.className = "muted";
+      load.style.margin = "0";
+      load.textContent = "Loading…";
+      mkv.appendChild(load);
       mfoot.textContent = "";
       if (merrors) {
         merrors.textContent = "";
@@ -1187,13 +1367,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         const r = await fetch(SESSION_DETAIL_API + "?" + q.toString(), { cache: "no-store" });
         if (!r.ok) throw new Error("HTTP " + r.status);
         const data = await r.json();
-        mid.textContent = (data.session_id || "") + " · user " + (data.user_id || "");
-        msummary.textContent = data.summary || "";
-        mtimes.textContent =
-          "Conversation start (first buffered event): " +
-          formatLocalTs(data.started_ts) +
-          " — Last activity (last buffered event): " +
-          formatLocalTs(data.ended_ts);
+        fillSessionModalKv(mkv, data, null);
         if (merrors) {
           if (data.errors_brief) {
             merrors.textContent = data.errors_brief;
@@ -1205,8 +1379,11 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         }
         mfoot.textContent = data.disclaimer || "";
       } catch (e) {
-        msummary.textContent =
-          "Could not load session detail. " + (e && e.message ? e.message : String(e));
+        fillSessionModalKv(
+          mkv,
+          null,
+          "Could not load session detail. " + (e && e.message ? e.message : String(e))
+        );
       }
     }
 
@@ -1225,17 +1402,30 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       ev.stopPropagation();
     });
     document.getElementById("errors-modal-close").addEventListener("click", closeErrorsModal);
+    document.getElementById("sessions-overview-backdrop").addEventListener("click", closeSessionsOverviewModal);
+    document.getElementById("sessions-overview-panel").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+    });
+    document.getElementById("sessions-overview-close").addEventListener("click", closeSessionsOverviewModal);
     document.getElementById("pill-models").addEventListener("click", function () {
       openPricingModal();
     });
     document.getElementById("pill-errors").addEventListener("click", function () {
       openErrorsModal();
     });
+    document.getElementById("pill-sessions").addEventListener("click", function () {
+      openSessionsOverviewModal();
+    });
     document.addEventListener("keydown", function (ev) {
       if (ev.key !== "Escape") return;
       const eb = document.getElementById("errors-modal-backdrop");
       if (eb && eb.classList.contains("open")) {
         closeErrorsModal();
+        return;
+      }
+      const sob = document.getElementById("sessions-overview-backdrop");
+      if (sob && sob.classList.contains("open")) {
+        closeSessionsOverviewModal();
         return;
       }
       const pb = document.getElementById("pricing-modal-backdrop");

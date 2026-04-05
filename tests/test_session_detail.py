@@ -53,6 +53,12 @@ def test_session_detail_payload():
     assert p["started_ts"] <= p["ended_ts"]
     assert "user" in p["summary"].lower()
     assert p["disclaimer"]
+    assert p["stats"] is not None
+    assert p["stats"]["available"] is True
+    assert p["stats"]["buffer_events"] == 2
+    assert p["stats"]["authors_seen"] == ["user", "agent"]
+    assert p["stats"]["tokens_input"] == 10
+    assert p["stats"]["tokens_output"] == 7
 
     missing = store.session_detail_payload("x", "y")
     assert missing is None
@@ -99,6 +105,28 @@ def test_errors_brief_truncates():
     assert "error-class" in brief.lower()
     assert "NOT_FOUND" in brief
     assert len(brief) < 500
+
+
+def test_session_detail_stats_none_without_timestamps():
+    TelemetryStore.reset_for_tests()
+    store = TelemetryStore.instance()
+    store.record_event(
+        user_id="u3",
+        session_id="s3",
+        record={
+            "author": "solo",
+            "model_version": "gemini-2.5-flash",
+            "usage": {"prompt_token_count": 1, "candidates_token_count": 0},
+            "error_code": None,
+            "error_message": None,
+        },
+        default_model="gemini-2.5-flash",
+        pricing_config_path=None,
+    )
+    p = store.session_detail_payload("u3", "s3")
+    assert p is not None
+    assert p["stats"] is None
+    assert "timestamp" in p["summary"].lower()
 
 
 def test_summary_has_no_timeline_phrase():
