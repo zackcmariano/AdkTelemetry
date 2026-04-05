@@ -19,6 +19,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="https://raw.githubusercontent.com/zackcmariano/AdkTelemetry/refs/heads/master/assets/logo_adkT.ico" type="image/x-icon" />
   <title>AdkTelemetry - Dashboard</title>
   <style>
     :root {
@@ -46,7 +47,21 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       padding: 16px 24px;
       border-bottom: 1px solid var(--border);
     }
-    header h1 { font-size: 1.25rem; margin: 0; font-weight: 700; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .brand-logo {
+      height: 44px;
+      width: auto;
+      max-width: 61px;
+      object-fit: contain;
+      flex-shrink: 0;
+      opacity: 0.92;
+    }
+    header h1 { font-size: 1.5rem; margin: 0; font-weight: 700; line-height: 1.2; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     .pill {
       border: 1px solid var(--border);
@@ -547,7 +562,18 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <header>
-    <h1>AdkTelemetry</h1>
+    <div class="brand">
+      <img
+        class="brand-logo"
+        src="https://raw.githubusercontent.com/zackcmariano/AdkTelemetry/refs/heads/master/assets/logo_adkT.png"
+        alt=""
+        width="55"
+        height="55"
+        decoding="async"
+        fetchpriority="low"
+      />
+      <h1>AdkTelemetry</h1>
+    </div>
     <div class="toolbar">
       <button type="button" class="pill" id="pill-sessions" aria-haspopup="dialog" aria-expanded="false" title="Open sessions overview for the selected time range">
         Sessions -
