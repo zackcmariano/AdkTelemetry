@@ -18,6 +18,8 @@ def test_snapshot_filtered_empty():
     assert snap["totals"]["total_output_tokens"] == 0
     assert snap["totals"]["total_cost_usd"] == 0
     assert snap["totals"]["last_interaction_ts"] is None
+    assert snap["activity_timeline"]["bucket_count"] == 24
+    assert sum(snap["activity_timeline"]["counts"]) == 0
     assert snap["sessions"] == []
 
 
@@ -64,6 +66,7 @@ def test_snapshot_filtered_counts_events_in_window():
     assert snap["totals"]["total_output_tokens"] == 10
     assert snap["totals"]["last_interaction_ts"] == t1
     assert snap["sessions"][0]["event_count"] == 1
+    assert sum(snap["activity_timeline"]["counts"]) == 1
 
     snap_all = store.snapshot_filtered(
         t0,
@@ -76,3 +79,4 @@ def test_snapshot_filtered_counts_events_in_window():
     assert snap_all["totals"]["total_output_tokens"] == 20
     assert snap_all["totals"]["last_interaction_ts"] == t2
     assert float(snap_all["totals"]["total_cost_usd"]) >= 0
+    assert sum(snap_all["activity_timeline"]["counts"]) == 2

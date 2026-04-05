@@ -137,10 +137,14 @@ class TelemetryStore:
                 last_ix = max(float(s.last_timestamp) for s in self._sessions.values())
             else:
                 last_ix = None
+            activity_timeline = _activity_timeline_from_events(
+                self._events, range_since=None, range_until=None, n=24
+            )
             return {
                 "sessions": sessions[:100],
                 "model_distribution": dict(self._global_models),
                 "recent_errors": list(reversed(self._global_errors[-50:])),
+                "activity_timeline": activity_timeline,
                 "totals": {
                     "sessions": len(self._sessions),
                     "events": sum(s.event_count for s in self._sessions.values()),
@@ -353,10 +357,18 @@ class TelemetryStore:
                 cost_sum = 0.0
                 last_ix = None
 
+            activity_timeline = _activity_timeline_from_events(
+                self._events,
+                range_since=since_f,
+                range_until=until_f,
+                n=24,
+            )
+
             return {
                 "sessions": sessions_out,
                 "model_distribution": dict(model_distribution),
                 "recent_errors": recent_errors,
+                "activity_timeline": activity_timeline,
                 "totals": {
                     "sessions": len(sessions_raw),
                     "events": ev_total,
@@ -390,6 +402,69 @@ def _events_in_window(
         if since <= t <= until:
             out.append(e)
     return out
+
+
+def _activity_timeline_from_events(
+    events_map: dict[str, list[dict[str, Any]]],
+    *,
+    range_since: float | None,
+    range_until: float | None,
+    n: int = 24,
+) -> dict[str, Any]:
+    """
+    Histogram of event counts into n equal-width time buckets.
+    If range_since/range_until are set, bucket edges match that window (dashboard range).
+    If both are None, edges are min..max timestamp over all buffered events.
+    """
+    counts = [0] * n
+    if range_since is not None and range_until is not None:
+        since_f = float(range_since)
+        until_f = float(range_until)
+    else:
+        all_ts: list[float] = []
+        for evs in events_map.values():
+            for e in evs:
+                t = _event_ts(e)
+                if t is not None:
+                    all_ts.append(t)
+        if not all_ts:
+            return {"since": None, "until": None, "bucket_count": n, "counts": counts}
+        since_f = min(all_ts)
+        until_f = max(all_ts)
+
+    span = until_f - since_f
+    if span <= 0:
+        span = 1.0
+        mid = since_f
+        since_f = mid - 0.5
+        until_f = mid + 0.5
+
+    rs = float(range_since) if range_since is not None else None
+    ru = float(range_until) if range_until is not None else None
+
+    for evs in events_map.values():
+        for e in evs:
+            t = _event_ts(e)
+            if t is None:
+                continue
+            if rs is not None and ru is not None:
+                if not (rs <= t <= ru):
+                    continue
+            elif not (since_f <= t <= until_f):
+                continue
+            idx = int((t - since_f) / span * n)
+            if idx >= n:
+                idx = n - 1
+            elif idx < 0:
+                idx = 0
+            counts[idx] += 1
+
+    return {
+        "since": since_f,
+        "until": until_f,
+        "bucket_count": n,
+        "counts": counts,
+    }
 
 
 def _rollup_records(

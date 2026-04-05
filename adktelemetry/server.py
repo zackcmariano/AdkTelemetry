@@ -144,8 +144,31 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
     th { color: var(--muted); font-weight: 500; }
+    .ts-chart-block { display: flex; flex-direction: column; gap: 4px; }
     .ts-chart { height: 140px; display: flex; align-items: flex-end; gap: 3px; }
     .ts-bar { flex: 1; background: linear-gradient(#fbbf24, #3b82f6); border-radius: 2px 2px 0 0; min-height: 4px; }
+    .ts-chart-axis {
+      display: flex;
+      flex-direction: row;
+      gap: 3px;
+      align-items: flex-start;
+      min-height: 2.4rem;
+      padding: 0 1px;
+      font-size: 0.68rem;
+      line-height: 1.25;
+      color: var(--muted);
+    }
+    .ts-chart-axis .ts-tick {
+      min-width: 0;
+      text-align: center;
+    }
+    .ts-chart-axis .ts-tick-group {
+      flex: 6;
+      white-space: normal;
+      word-break: break-word;
+      hyphens: manual;
+      padding: 0 4px;
+    }
     .line-chart { height: 120px; position: relative; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border); }
     .line-chart svg { width: 100%; height: 100%; }
     footer { padding: 16px 24px; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
@@ -582,8 +605,13 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       </section>
       <section class="card span-8">
         <div class="card-head"><span class="card-title">Activity timeline (stacked)</span></div>
-        <div class="ts-chart" id="ts-chart"></div>
-        <p class="muted" style="margin-bottom:0">Synthetic buckets from event counts in the selected time range.</p>
+        <div class="ts-chart-block">
+          <div class="ts-chart" id="ts-chart"></div>
+          <div class="ts-chart-axis" id="ts-chart-axis" aria-hidden="true"></div>
+        </div>
+        <p class="muted" style="margin-bottom:0">
+          Event counts in 24 equal-width time buckets (selected dashboard range). Bar height is relative to the busiest bucket. Axis labels group 6 buckets each (local start–end).
+        </p>
       </section>
       <section class="card span-4">
         <div class="card-head"><span class="card-title">Token trend (in + out)</span></div>
@@ -965,17 +993,81 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 
         const n = 24;
         const chart = document.getElementById("ts-chart");
+        const axis = document.getElementById("ts-chart-axis");
         chart.textContent = "";
+        if (axis) axis.textContent = "";
         const totalEv = events;
-        for (let i = 0; i < n; i++) {
-          const wave = 0.55 + 0.45 * Math.sin((i / n) * Math.PI * 2);
-          const bucket = totalEv > 0 ? (totalEv / n) * (0.7 + 0.6 * wave) : 5 * wave;
-          const h = Math.min(95, Math.max(6, (bucket / Math.max(totalEv / n, 1)) * 55));
-          const d = document.createElement("div");
-          d.className = "ts-bar";
-          d.style.height = h + "%";
-          d.title = "bucket ~" + Math.round(bucket) + " events";
-          chart.appendChild(d);
+        const tl = data.activity_timeline;
+        if (
+          tl &&
+          Array.isArray(tl.counts) &&
+          tl.counts.length === n &&
+          tl.since != null &&
+          tl.until != null &&
+          isFinite(Number(tl.since)) &&
+          isFinite(Number(tl.until))
+        ) {
+          const since = Number(tl.since);
+          const until = Number(tl.until);
+          const span = until - since;
+          const maxC = Math.max(0, ...tl.counts.map(function (x) { return Number(x) || 0; }));
+          for (let i = 0; i < n; i++) {
+            const c = Number(tl.counts[i]) || 0;
+            const h = maxC > 0 ? Math.min(95, Math.max(4, (c / maxC) * 95)) : 4;
+            const bucketStart = since + (span * i) / n;
+            const bucketEnd = since + (span * (i + 1)) / n;
+            const d = document.createElement("div");
+            d.className = "ts-bar";
+            d.style.height = h + "%";
+            d.title =
+              c +
+              " event(s) · " +
+              formatLocalTs(bucketStart) +
+              " – " +
+              formatLocalTs(bucketEnd);
+            chart.appendChild(d);
+          }
+          if (axis) {
+            const groupSize = 6;
+            const numGroups = n / groupSize;
+            for (let g = 0; g < numGroups; g++) {
+              const i0 = g * groupSize;
+              const rangeStart = since + (span * i0) / n;
+              const rangeEnd = since + (span * (i0 + groupSize)) / n;
+              const lab = document.createElement("span");
+              lab.className = "ts-tick ts-tick-group";
+              lab.textContent = formatTimelineRangeLabel(rangeStart, rangeEnd);
+              lab.title =
+                "Buckets " +
+                (i0 + 1) +
+                "–" +
+                (i0 + groupSize) +
+                ": " +
+                formatLocalTs(rangeStart) +
+                " – " +
+                formatLocalTs(rangeEnd);
+              axis.appendChild(lab);
+            }
+          }
+        } else {
+          for (let i = 0; i < n; i++) {
+            const wave = 0.55 + 0.45 * Math.sin((i / n) * Math.PI * 2);
+            const bucket = totalEv > 0 ? (totalEv / n) * (0.7 + 0.6 * wave) : 5 * wave;
+            const h = Math.min(95, Math.max(6, (bucket / Math.max(totalEv / n, 1)) * 55));
+            const d = document.createElement("div");
+            d.className = "ts-bar";
+            d.style.height = h + "%";
+            d.title = "~" + Math.round(bucket) + " events (illustrative layout)";
+            chart.appendChild(d);
+          }
+          if (axis) {
+            const lab = document.createElement("span");
+            lab.className = "ts-tick";
+            lab.style.flex = "1";
+            lab.textContent = "—";
+            lab.title = "Time axis unavailable";
+            axis.appendChild(lab);
+          }
         }
 
         const svg = document.getElementById("line-svg");
@@ -986,24 +1078,29 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         function pathLine(pts) {
           if (!pts.length) return "";
           const n1 = Math.max(pts.length - 1, 1);
+          const xLeft = 30;
+          const xRight = 196;
           return pts
             .map((p, i) => {
-              const x = 8 + (i / n1) * 184;
+              const x = xLeft + (i / n1) * (xRight - xLeft);
               const y = 88 - (p.y / ymax) * 72;
               return (i ? "L" : "M") + x.toFixed(1) + "," + y.toFixed(1);
             })
             .join(" ");
         }
         const legend =
-          '<text x="4" y="12" font-size="8" fill="#6b7280">in</text><text x="4" y="22" font-size="8" fill="#22c55e">out</text>';
+          '<g class="line-chart-legend" pointer-events="none">' +
+          '<text x="4" y="12" font-size="8" fill="#3b82f6" paint-order="stroke" stroke="#ffffff" stroke-width="2.5">in</text>' +
+          '<text x="4" y="22" font-size="8" fill="#22c55e" paint-order="stroke" stroke="#ffffff" stroke-width="2.5">out</text>' +
+          "</g>";
         svg.innerHTML =
-          legend +
           '<path d="' +
           pathLine(ptsIn) +
           '" fill="none" stroke="#3b82f6" stroke-width="2" vector-effect="non-scaling-stroke"/>' +
           '<path d="' +
           pathLine(ptsOut) +
-          '" fill="none" stroke="#22c55e" stroke-width="2" vector-effect="non-scaling-stroke"/>';
+          '" fill="none" stroke="#22c55e" stroke-width="2" vector-effect="non-scaling-stroke"/>' +
+          legend;
       } catch (e) {
         console.error("AdkTelemetry refresh:", e);
       }
@@ -1014,6 +1111,28 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
         dateStyle: "short",
         timeStyle: "medium",
       });
+    }
+
+    function formatTimelineMdHm(d) {
+      const mo = (d.getMonth() + 1).toString().padStart(2, "0");
+      const da = d.getDate().toString().padStart(2, "0");
+      const hh = d.getHours().toString().padStart(2, "0");
+      const mm = d.getMinutes().toString().padStart(2, "0");
+      return mo + "/" + da + " " + hh + ":" + mm;
+    }
+
+    function formatTimelineRangeLabel(startSec, endSec) {
+      if (
+        startSec == null ||
+        endSec == null ||
+        !isFinite(Number(startSec)) ||
+        !isFinite(Number(endSec))
+      ) {
+        return "—";
+      }
+      const a = new Date(Number(startSec) * 1000);
+      const b = new Date(Number(endSec) * 1000);
+      return formatTimelineMdHm(a) + " - " + formatTimelineMdHm(b);
     }
 
     function closeSessionModal() {
