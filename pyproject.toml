@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adktelemetry"
-version = "0.1.0"
+version = "1.0.0"
 description = "Library for Google ADK focused on observability, telemetry, session tracing, and operational cost analysis for AI agents."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -40,8 +40,14 @@ classifiers = [
 requires-python = ">=3.10"
 
 dependencies = [
-  "google-adk>=1.16.0",
-  "pyyaml>=6.0"
+  # ADK runtime (Runner, Event, dev server hooks).
+  "google-adk>=1.23.0",
+  # Declared because adktelemetry imports it directly (dashboard + snapshot/stream APIs).
+  "fastapi>=0.115.0",
+  # Declared because adktelemetry.sse_telemetry imports StreamingResponse from Starlette.
+  "starlette>=0.40.0",
+  # FinOps catalog (gemini_pricing.yaml).
+  "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
