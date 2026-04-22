@@ -47,6 +47,97 @@ ensure_adk_web_server_patch()
 
 ---
 
+## Durable sessions on Firestore (optional)
+
+By default ADK stores sessions in memory (`InMemorySessionService`), so every
+process restart wipes the conversation history. For production you can opt in
+to **Google Firestore** as the session backend with a single call:
+
+```bash
+pip install "adktelemetry[firestore]"
+```
+
+In your `services.py` (loaded by ADK **before** the web server boots):
+
+```python
+from adktelemetry import agentfirestore
+from adktelemetry.patch_cli import ensure_adk_web_server_patch
+
+ensure_adk_web_server_patch()
+
+agentfirestore(
+    credentials="keys/firestore-agent-key.json",  # path | dict | None (ADC)
+    database="agentes-enterprise",                # Firestore database id
+    # project_id is auto-detected from the service account key
+)
+```
+
+That is all the developer writes. Under the hood, `agentfirestore()`:
+
+1. Builds a singleton `google.cloud.firestore.AsyncClient` from your service
+   account (path, dict, or Application Default Credentials).
+2. Patches `AdkWebServer.__init__` so the next `adk web` process uses a
+   **`FirestoreSessionService`** (full `BaseSessionService` implementation:
+   `create_session`, `get_session`, `list_sessions`, `delete_session`,
+   `append_event`).
+3. Installs the same runner hook as `agentelemetry()` and, when both are
+   enabled, mirrors every telemetry record into a `telemetry` subcollection
+   on the session document - asynchronously, through a bounded in-process
+   queue with drop-oldest backpressure (never blocks the agent turn).
+
+### Firestore layout
+
+```
+/{root_collection}/{app_name}/users/{user_id}/sessions/{session_id}
+    fields: id, app_name, user_id, state (map), created_at, last_update_time
+    subcollection events/{event_id}    <- full ADK Event snapshot (JSON)
+    subcollection telemetry/{auto_id}  <- AdkTelemetry record mirror
+```
+
+`root_collection` defaults to `adk_agents` and is configurable via the
+matching kwarg of `agentfirestore()`.
+
+### IAM required on the GCP project
+
+The service account behind `credentials=` needs **write access to the target
+Firestore database**. Grant the standard role on the `agentes-app-uat`
+project (or use a tighter custom role in production):
+
+```bash
+gcloud projects add-iam-policy-binding agentes-app-uat \
+  --member="serviceAccount:firestore-agent@agentes-app-uat.iam.gserviceaccount.com" \
+  --role="roles/datastore.user"
+```
+
+For **non-default databases** (e.g. `agentes-enterprise`), grant the role
+scoped to that database resource so the principal of least privilege is
+preserved:
+
+```bash
+gcloud alpha firestore databases add-iam-policy-binding agentes-enterprise \
+  --project=agentes-app-uat \
+  --member="serviceAccount:firestore-agent@agentes-app-uat.iam.gserviceaccount.com" \
+  --role="roles/datastore.user"
+```
+
+Without this binding the library fails fast on the first write with
+`google.api_core.exceptions.PermissionDenied: 403 Missing or insufficient permissions.`
+
+### Default vs Firestore mode
+
+| Concern | Default (`agentelemetry` only) | With `agentfirestore()` |
+|---|---|---|
+| Session storage | ADK `InMemorySessionService` (RAM) | Firestore, per `{app, user, session}` |
+| Conversation survives restart | No | Yes (`FirestoreSessionService.get_session`) |
+| Multi-process / horizontal scale | No (RAM per process) | Yes (Firestore is the source of truth) |
+| Per-session telemetry logs | In-memory ring buffer + dashboard | Also mirrored to `telemetry` subcollection |
+| Developer API surface | `agentelemetry(modelkey=..., adkmodel=...)` | `+ agentfirestore(credentials=..., database=...)` |
+
+Both modes are independent and composable: enable telemetry alone for local
+development, add `agentfirestore()` when you move to staging/production.
+
+---
+
 ## What you get (how to read the data)
 
 | Surface | Purpose |

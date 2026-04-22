@@ -12,6 +12,30 @@ _orig_run_async: Any = None
 _installed = False
 
 
+def _mirror_to_firestore(
+    app_name: str,
+    user_id: str,
+    session_id: str,
+    record: dict,
+) -> None:
+    """Best-effort mirror of a telemetry record into Firestore (no-op when disabled)."""
+    try:
+        from adktelemetry.firestore.config import get_firestore_config
+
+        if get_firestore_config() is None:
+            return
+        from adktelemetry.firestore.telemetry_writer import enqueue_record
+
+        enqueue_record(
+            app_name=app_name or "default",
+            user_id=user_id,
+            session_id=session_id,
+            record=record,
+        )
+    except Exception:
+        logger.debug("AdkTelemetry[firestore]: telemetry mirror skipped", exc_info=True)
+
+
 def _install() -> None:
     global _orig_run_async, _installed
     if _installed:
@@ -43,6 +67,8 @@ def _install() -> None:
         store = TelemetryStore.instance()
 
         try:
+            app_name = getattr(self, "app_name", "") or ""
+
             async for event in _orig_run_async(
                 self,
                 user_id=user_id,
@@ -61,6 +87,7 @@ def _install() -> None:
                         default_model=default_model,
                         pricing_config_path=pricing_path,
                     )
+                    _mirror_to_firestore(app_name, user_id, session_id, rec)
                 except Exception:
                     logger.exception("AdkTelemetry: failed to record event")
                 yield event
@@ -69,13 +96,15 @@ def _install() -> None:
             # ADK web server then emits data: {"error": "..."} on the wire; record here so the
             # dashboard sees the failure without relying on that SSE shape (and we avoid double-counting).
             try:
+                failure_rec = runner_failure_to_record(e)
                 store.record_event(
                     user_id=user_id,
                     session_id=session_id,
-                    record=runner_failure_to_record(e),
+                    record=failure_rec,
                     default_model=default_model,
                     pricing_config_path=pricing_path,
                 )
+                _mirror_to_firestore(getattr(self, "app_name", "") or "", user_id, session_id, failure_rec)
             except Exception:
                 logger.exception("AdkTelemetry: failed to record runner failure")
             raise

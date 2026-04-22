@@ -51,6 +51,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Enables agentfirestore(): durable ADK sessions + per-session telemetry logs on Firestore.
+firestore = [
+  "google-cloud-firestore>=2.16.0",
+  "google-auth>=2.20.0",
+]
 dev = ["pytest>=7.0"]
 
 [tool.setuptools.package-data]
